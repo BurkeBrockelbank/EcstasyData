@@ -1,0 +1,63 @@
+SUMMARY:
+
+Hello, and welcome to my log on the Regional Trends in the Misrepresentation of MDMA in collaboration with EcstasyData.org and Erowid centre.
+
+Firstly, the original idea beind this project is to use the visualize data from EcstasyData.org with a self-organizing map. The map will ultimately only get a few pieces of data as input. It will have the content of MDMA, other enactogens, psychedelics ... tranquilizers as well as an (x,y,z) tuple describing its position on the globe and the date of testing. An SOM may separate this data into classes which have both regional features and features related to pill composition.
+
+PROGRESS:
+September 5 - 12: First Contact
+I contacted Erowid Center's general contact email will an offer to look into their data for them Luckily for me, Earth, one of the co-founders of Erowid Center, contacted me back. After some talk I was able to get an idea of the ind of data that the database holds. It primarily has data with the headings:
+DataDataID|URL|ThumbnailURL|DetailImage1|ReagentImage1|Name|OtherName|SubmitterDigitCode|SoldAsEcstasy|Substance (sep by ;;)|DatePublished|DateTested (approx)|LocationString|SizeString|DataSource
+This is where I got the idea to take a look at some regional trends in the data.
+
+I set myself to pulling the data off of EcstasyData.org. Earth quickly directed me to the url https://www.ecstasydata.org/results.php?s=hexedrone&style=data_only. Data here is in a fairly convenient form. During my correspondence with Earth I found that he had some sort of ID system for chemicals which lead me to wonder whether the data was available in an even more convenient form such as in a SQL database.
+
+September 13 - 21: SQL Implementation and Communication Issues
+I brought up my ideas with Earth and he took issue with my treatment of substance composition. Substances are given in the form of parts, i.e. a pill is 3 parts MDMA and one part methamphetamine. I was converting this into 75% MDMA and 25% methamphetamine but Earth was unhappy with this treatment due to concerns over the interpretation of the data. Giving values as percentages, Earth worries, leads to the misinterpretation that a 100g pill is 75g of MDMA and 25g of methamphetamine which is not the case. I want to speak with Earth about this way of handling the data as it is the most natural way to give it to the SOM (since it is naturally normalized) but I have not been able to get in contact with him about this for four days.
+
+September 21 - : SQL Focus
+Since I am having troube contacting Earth, I am going to continue on with the SQL part of the project, assuming that I have the data in a convenient form. If Earth has the data in a SQL format I will use that, otherwise I will have to generate these tables from the url above. I don't know yet so I don't want to waste work on it. A note: Date is a real number ranging from 0 to 1 which is just a rescaled version of DatePublished.
+
+My ideal implementation for the database for this project takes the form:
+
+TABLE Location
+Location_ID | Location_String | Latitude | Longitude | X | Y | Z
+
+TABLE Substances
+Substance_ID | Substance_Name | MDMA | Enactogen | Psychedelic | Cannabinoid | Dissocciative | Stimulant |Depressant | Nonpsychoactive | Unidentified | NotTested | Undetected
+
+TABLE Pill_Content
+Pill_ID | SubstanceID | Substance_Percentage
+
+TABLE Pill_Misc
+Pill_ID | DataDataID | URL | ThumbnailURL | DetailImage1 | ReagentImage1 | OtherName | SubmitterDigitCode | SoldAsEcstasy | DatePublished | DateTested (approx) | Date | Location_ID | SizeString | DataSource
+
+VIEW SOM_Data
+CREATE VIEW Pill_Classification As
+Select
+    Pill_Misc.Pill_ID,
+    Pill_Misc.Date,
+    Location.X,
+    Location.Y,
+    Location.Z,
+    SUM(Pill_Content.Substance_Percentage * Substances.MDMA ) as MDMA,
+    SUM(Pill_Content.Substance_Percentage * Substances.Enactogen) as Enactogen,
+    SUM(Pill_Content.Substance_Percentage * Substances.Psychedelic) as Psychedelic,
+    SUM(Pill_Content.Substance_Percentage * Substances.Cannabinoid ) as Cannabinoid,
+    SUM(Pill_Content.Substance_Percentage * Substances.Dissociative) as Dissociative,
+    SUM(Pill_Content.Substance_Percentage * Substances.Stimulant ) as Stimulant,
+    SUM(Pill_Content.Substance_Percentage * Substances.Depressant) as Depressant,
+    SUM(Pill_Content.Substance_Percentage * Substances.Nonpsychoactive) as Nonpsychoactive
+From
+    Pill_Misc, Pill_Content, Substances, Location, Pill_Misc
+Where Pill_Misc.Pill_ID = Pill_Content.Pill_ID
+And Pill_Misc.Location_ID = Location.Location_ID
+And Pill_Content.Substance_ID = Substances.Substance_ID
+Group By Pill.Pill_ID
+
+
+
+OTHER NOTES:
+Analysis idea. After the SOM is formed, each node can be tested to find the total distance from all data points. These sums can be normalized and plotted on a u-matrix, which will be able to show us classifications. I.e. if a certain bunch of nodes have high sums with a border of low sums, then we know that these nodes make up a class.
+
+After I have analyzed the data with the SOM I can convert the percentages back into parts if Earth is really adamant on formatting it in that way even though going back will not be as exact.
