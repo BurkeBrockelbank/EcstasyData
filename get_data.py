@@ -43,10 +43,14 @@ def custom_formatwarning(msg, *args, **kwargs):
     return str(msg) + '\n'
 warnings.formatwarning = custom_formatwarning
 
-def create_database(url, path):
+def build_processed_data(url):
 	html = _load_data(url)
 	data_string = _remove_junk(html)
 	processed_data = _read_to_list(data_string)
+	return processed_data
+
+def create_database(url, path):
+	processed_data = build_processed_data(url)
 	_list_to_database(path, processed_data)
 
 
