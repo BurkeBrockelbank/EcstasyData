@@ -128,12 +128,12 @@ def plot_xyz(lat_lon_v_list, box_size = 6, cmap_name = 'Purples', title = '', pa
 # m.drawcoastlines()
 # m.drawcountries()
 
-rand_data = np.random.rand(1000,3)
-print(rand_data[:,2].mean())
-rand_data[:,0] = (rand_data[:,0]-0.5)*180
-rand_data[:,1] = rand_data[:,1]*360
+# rand_data = np.random.rand(1000,3)
+# print(rand_data[:,2].mean())
+# rand_data[:,0] = (rand_data[:,0]-0.5)*180
+# rand_data[:,1] = rand_data[:,1]*360
 
-plot_xyz(rand_data, title='MDMA Purity (Random data for example)')
+# plot_xyz(rand_data, title='MDMA Purity (Random data for example)')
 
 # lats = rand_data[:,0]
 # lons = rand_data[:, 1]

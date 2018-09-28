@@ -54,8 +54,9 @@ misc_others = ['Chlorpheniramine', 'Guaifenesin', 'Phenylpropanolamine', 'Niacin
 	'Methylsulfonylmethane', 'Procaine', 'Phenacetin', 'Lidocaine', 'Benzocaine', 'Novocaine', 'Fluoxetine', 'Allopurinol', 'Levamisole', \
 	'Benocyclidine', 'MDA 2-aldoxime analog', 'MDMA Methylene homolog', 'Melatonin', 'Sildenafil', 'Tadalafil', \
 	'Stanozolol', 'Sibutramine', 'Diclofenac', 'Aceclofenac', 'W-15', 'Theophylline', \
-	'Unidentified', 'Other Pharm.', 'Synthesis Byproducts', 'Other']
+	'Unidentified', 'Other Pharm.', 'Synthesis Byproducts', 'Other', 'None detected', 'Trace detected']
 silent_others = no_effect + misc_others + steroids + nootropics + precursors_intermediates_byproducts
 
-aliases_for_nothing = ['Not tested', 'Not Tested', '', 'Not tested:', 'Not Tested:', 'Not tested:---', 'Not Tested:---', 'Not tested:1', 'Not Tested:1']
+aliases_for_nothing = ['Not tested', 'Not Tested', '', 'Not tested:', 'Not Tested:', 'Not tested:---', 'Not Tested:---', \
+	'Not tested:1', 'Not Tested:1', 'On Hold - See Note:0', 'On Hold - See Note:', 'On Hold - See Note:1']
 	

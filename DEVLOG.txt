@@ -55,7 +55,12 @@ And Pill_Misc.Location_ID = Location.Location_ID
 And Pill_Content.Substance_ID = Substances.Substance_ID
 Group By Pill.Pill_ID
 
+I contacted Earth again about how to classify drugs, i.e. whether the categories here are sufficient or if we should have categories like in the venn diagram in the last issue of Extracts.
 
+I am building the database! I have noticed that many of the locations are actually poorly defined, such as Framingham MD being spelled Framinghamm or saying santa monica is in India.
+
+October 1 - : SOMs
+I am using MiniSOM to do my SOM.
 
 OTHER NOTES:
 Analysis idea. After the SOM is formed, each node can be tested to find the total distance from all data points. These sums can be normalized and plotted on a u-matrix, which will be able to show us classifications. I.e. if a certain bunch of nodes have high sums with a border of low sums, then we know that these nodes make up a class.
