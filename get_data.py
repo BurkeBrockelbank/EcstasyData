@@ -44,13 +44,18 @@ def custom_formatwarning(msg, *args, **kwargs):
 warnings.formatwarning = custom_formatwarning
 
 def build_processed_data(url):
+	"""
+	Returns:
+		0: Processed data list
+		1: List of all unknown substances
+	"""
 	html = _load_data(url)
 	data_string = _remove_junk(html)
 	processed_data = _read_to_list(data_string)
 	return processed_data
 
 def create_database(url, path):
-	processed_data = build_processed_data(url)
+	processed_data  = build_processed_data(url)
 	_list_to_database(path, processed_data)
 
 
@@ -96,11 +101,8 @@ def _read_to_list(data_string):
 	Returns:
 		0: List of tuples or form:
 		[(DataDataID integer, URL text, Name text, OtherName text,
-		SoldAsEcstasy integer, SubstanceMDMA real, SubstanceEcstasyLike real,
-		SubstancePsychedelic real, SubstanceCannabinoid real,
-		SubstanceDissociative real, SubstanceStimulant real,
-		SubstanceDepressant real, SubstanceOther real, Date text,
-		x real, y real, z real, Dose integer), ...]
+		SoldAsEcstasy integer, composition, Date datetime.date,
+		loc str, Dose integer), ...]
 	"""
 	good_lines = 0
 	bad_lines = 0
@@ -118,25 +120,17 @@ def _read_to_list(data_string):
 			continue
 		raw_tuple = clean_line.split('|')
 		try:
-			processed_tuple = _raw_tuple_to_processed_data(raw_tuple, warn_other=True)
+			processed_tuple = _raw_tuple_to_processed_data(raw_tuple)
 			processed_data.append(processed_tuple)
 			good_lines += 1
 		except ValueError as e:
 			bad_lines += 1
 			warnings.warn('Could not read the following line\n'+str(raw_tuple)+'\nbecause '+str(e))
-		except AttributeError:
+		except AttributeError as e:
 			bad_lines += 1
-			warnings.warn('Attribute issue with the following line\nbecause'+str(raw_tuple))
-		except SubstanceError as substance_str:
-			bad_lines += 1
-			warnings.warn(str(raw_tuple[0]) + ' Has no substances ' + str(substance_str))
+			warnings.warn('Attribute issue with the following line\n'+str(raw_tuple)+'\nbecause '+str(e))
 		except TestingError as substance_str:
 			untested_lines += 1
-			# warnings.warn(str(raw_tuple[0]) + ' was not tested')
-		except UnidentifiedError as unknown_substance:
-			unknown_chem_lines += 1
-			unknown_substances.append(str(unknown_substance))
-			warnings.warn(str(raw_tuple[0]) + ' Unknown substance ' + str(unknown_substance) + ' encountered')
 
 	# Output unknown substances
 	alphabetic_substances = list(set(unknown_substances))
@@ -150,23 +144,20 @@ def _read_to_list(data_string):
 	out_f.close()
 
 	total_lines = good_lines + bad_lines + unknown_chem_lines+untested_lines
-	percentages = [str(round(100*x/total_lines,1)) for x in (good_lines, bad_lines, unknown_chem_lines, untested_lines)]
+	percentages = [str(round(100*x/total_lines,1)) for x in (good_lines, bad_lines, untested_lines)]
 	output_figures = tuple([str(total_lines)] + percentages)
-	print('Processed %s lines. %s%% kept, %s%% poorly formatted, %s%% with unknown substances, %s%% untested.' %\
+	print('Processed %s lines. %s%% kept, %s%% poorly formatted, %s%% untested.' %\
 		output_figures)
 	return processed_data
 
-def _raw_tuple_to_processed_data(raw_tuple, warn_other = False):
+def _raw_tuple_to_processed_data(raw_tuple):
 	"""
 	Interprets a tuple with elements
 			DataDataID|URL|ThumbnailURL|DetailImage1|ReagentImage1|Name|OtherName|SubmitterDigitCode|SoldAsEcstasy|Substance (sep by ;;)|DatePublished|DateTested (approx)|LocationString|SizeString|DataSource
 	into the form
 		(DataDataID integer, URL text, Name text, OtherName text,
-		SoldAsEcstasy integer, SubstanceMDMA real, SubstanceEcstasyLike real,
-		SubstancePsychedelic real, SubstanceCannabinoid real,
-		SubstanceDissociative real, SubstanceStimulant real,
-		SubstanceDepressant real, SubstanceOther real, Date text,
-		x real, y real, z real, Dose integer)
+		SoldAsEcstasy integer, composition, Date datetime.date,
+		loc str, Dose integer)
 	"""
 	DataDataID = int(raw_tuple[0])
 
@@ -186,37 +177,18 @@ def _raw_tuple_to_processed_data(raw_tuple, warn_other = False):
 		warnings.warn(str(DataDataID) + ' ' + SoldAsEcstasy_str + ' unknown if sold as ecstasy.')
 
 	Substance_str = raw_tuple[9]
-	composition = _parse_substance_str(Substance_str, warn_other = warn_other)
-
-	SubstanceMDMA = composition[0]
-
-	SubstanceEcstasyLike = composition[1]
-
-	SubstancePsychedelic = composition[2]
-
-	SubstanceCannabinoid = composition[3]
-
-	SubstanceDissociative = composition[4]
-
-	SubstanceStimulant = composition[5]
-
-	SubstanceDepressant = composition[6]
-
-	SubstanceOther = composition[7]
+	composition = _parse_substance_str(Substance_str)
 
 	Date_str = raw_tuple[11]
 	Date = _parse_date(Date_str)
 
 	Location_str = raw_tuple[12]
-	x,y,z = _get_coordinates(Location_str)
 
 	Dose_str = raw_tuple[13]
 	Dose = _parse_dose(Dose_str)
 
-	return (DataDataID, URL, Name, OtherName, SoldAsEcstasy, SubstanceMDMA, \
-		SubstanceEcstasyLike, SubstancePsychedelic, SubstanceCannabinoid, \
-		SubstanceDissociative, SubstanceStimulant, SubstanceDepressant, \
-		SubstanceOther, Date, x, y, z, Dose)
+	return (DataDataID, URL, Name, OtherName, SoldAsEcstasy, composition, \
+		Date, Location_str, Dose)
 
 def _parse_dose(dose_str):
 	"""
@@ -250,15 +222,20 @@ def _get_coordinates(location_str):
 		location_str: A string describing the location.
 
 	Returns:
-		0: (x,y,z)
+		0: latitude
+		1: longitude
+		2: x
+		3: y
+		4: z
 	"""
 	# # Create a client to query.
 	# geolocator = Nominatim(user_agent='Ecstasy_Data_2018')
 	# # Geocoding an address
 	# location = geolocator.geocode(location_str)
 	# xyz = vis.lat_lng_to_x_y_z(location.latitude, location.longitude)
-	xyz = (0,0,0)
-	return xyz 
+	# x, y, z = xyz
+	# return location.latitude, location.longitude, x, y, z
+	return 0, 0, 1, 0, 0
 
 def _parse_date(date_str):
 	"""
@@ -279,26 +256,23 @@ def _parse_date(date_str):
 	month = abbr_to_int[month_abbr]
 	return datetime.date(year, month, day)
 
-def _parse_substance_str(substance_str, warn_other = False):
+def _parse_substance_str(substance_str):
 	"""
 	Parses a substance string.
 
 	Args:
 		substance_str: The substance string in the html formal
-		warn_other: Default False. If true, warns the user every time a
-			substance is classified as other.
 
 	Returns:
-		0: List of percentages [MDMA, Ecstasy-like substances,
-			Psychedelics, Cannabinoids, Dissociatives, Stimulants,
-			Depressants, Other]
+		0: List of substances and quantities.
+			E.g. [('MDMA', 2), (Methamphetamine, 1)]
 	"""
 	# Deal with untested
 	if substance_str in clss.aliases_for_nothing:
 		raise TestingError(substance_str)
 	# Deal with sugar pills
 	if 'None Detected' in substance_str:
-		return [0,0,0,0,0,0,0,1]
+		return []
 	# First split over colons
 	substance_list = substance_str.replace('trace', '0').replace('---','0').split(';;')
 	# All the elements take the form substance:parts
@@ -317,24 +291,69 @@ def _parse_substance_str(substance_str, warn_other = False):
 
 	# Convert parts to percentages
 	total_parts = sum(substance_parts)
-	try:
-		substance_percentages = [x/total_parts for x in substance_parts]
-	except ZeroDivisionError:
+	if total_parts < 0.1:
 		# This exception triggers when only trace quantities of
 		# chemicals are found (i.e. when we only have things with 0s or ---)
-		return [0,0,0,0,0,0,0,1]
+		return []
 
-	# Convert substance names to substance types
-	substance_types = [classify_substance(sub_name, warn_other=warn_other) \
-		for sub_name in substance_names]
+	return list(zip(substance_names, substance_parts))
 
-	# Join substance types together
-	composition = [0]*9
-	for substance_type, substance_percentage in \
-		zip(substance_types, substance_percentages):
-		composition[substance_type] += substance_percentage
+# def _parse_substance_str(substance_str, warn_other = False):
+# 	"""
+# 	Parses a substance string.
 
-	return composition[:-1]
+# 	Args:
+# 		substance_str: The substance string in the html formal
+# 		warn_other: Default False. If true, warns the user every time a
+# 			substance is classified as other.
+
+# 	Returns:
+# 		0: List of percentages [MDMA, Ecstasy-like substances,
+# 			Psychedelics, Cannabinoids, Dissociatives, Stimulants,
+# 			Depressants, Other]
+# 	"""
+# 	# Deal with untested
+# 	if substance_str in clss.aliases_for_nothing:
+# 		raise TestingError(substance_str)
+# 	# Deal with sugar pills
+# 	if 'None Detected' in substance_str:
+# 		return [0,0,0,0,0,0,0,1]
+# 	# First split over colons
+# 	substance_list = substance_str.replace('trace', '0').replace('---','0').split(';;')
+# 	# All the elements take the form substance:parts
+# 	# except sometimes they are given as substance:
+# 	# with no number if there is only one chemical
+# 	if len(substance_list) == 1 and substance_list[0][-1] == ':':
+# 		substance_names = [substance_list[0][:-1]]
+# 		substance_parts = [1.0]
+# 	else:
+# 		substance_names = []
+# 		substance_parts = []
+# 		for name_part in substance_list:
+# 			name, part = name_part.split(':')
+# 			substance_names.append(name)
+# 			substance_parts.append(float(part))
+
+# 	# Convert parts to percentages
+# 	total_parts = sum(substance_parts)
+# 	try:
+# 		substance_percentages = [x/total_parts for x in substance_parts]
+# 	except ZeroDivisionError:
+# 		# This exception triggers when only trace quantities of
+# 		# chemicals are found (i.e. when we only have things with 0s or ---)
+# 		return [0,0,0,0,0,0,0,1]
+
+# 	# Convert substance names to substance types
+# 	substance_types = [classify_substance(sub_name, warn_other=warn_other) \
+# 		for sub_name in substance_names]
+
+# 	# Join substance types together
+# 	composition = [0]*9
+# 	for substance_type, substance_percentage in \
+# 		zip(substance_types, substance_percentages):
+# 		composition[substance_type] += substance_percentage
+
+# 	return composition[:-1]
 
 def classify_substance(substance, warn_other = False):
 	"""
@@ -370,43 +389,179 @@ def classify_substance(substance, warn_other = False):
 	else:
 		return 7
 
+def _substance_table(substance_list):
+	substance_table = []
+	substances = set(substance_list)
+	for i, substance in enumerate(substance_list):
+		classification = classify_substance(substance)
+		classification_list = [0,0,0,0,0,0,0,0]
+		classification_list[classification] = 1
+		classification_tuple = tuple(classification_list)
+		data_tup = (i, substance) + classification_tuple
+		substance_table.append(data_tup)
+	return substance_table
+
 def _list_to_database(path, data_list):
 	"""
 	Converts a list to a database with sqlite3.
 
 	Args:
 		path: Path to store the database.
-		data_list: List of processed tuples for data.
+		data_list: List of tuples or form:
+		[(DataDataID integer, URL text, Name text, OtherName text,
+		SoldAsEcstasy integer, composition, Date datetime.datetime,
+		loc str, Dose integer), ...]
 	"""
 	conn = sqlite3.connect(path)
 	c = conn.cursor()
-	c.execute("""CREATE TABLE edata (
-			DataDataID integer,
-			URL text,
-			Name text,
-			OtherName text,
-			SoldAsEcstasy integer,
-			SubstanceMDMA real,
-			SubstanceEcstasyLike real,
-			SubstancePsychedelic real,
-			SubstanceCannabinoid real,
-			SubstanceDissociative real,
-			SubstanceStimulant real,
-			SubstanceDepressant real,
-			SubstanceOther real,
-			Date text,
-			x real,
-			y real,
-			z real,
-			Dose integer
-		)""")
 
-	outF = open('foo.txt', 'w')
+	# TABLE Location
+	# Location_ID | Location_String | Latitude | Longitude | X | Y | Z
+	c.execute("""CREATE TABLE Location (
+			Location_ID integer,
+			Location_String text,
+			Latitude real,
+			Longitude real,
+			X real,
+			Y real,
+			Z real
+		);""")
+	location_list = [foo[7] for foo in data_list]
+	location_list = list(set(location_list))
+	for i, location in enumerate(location_list):
+		lat, lng, x, y, z = _get_coordinates(location)
+		c.execute('INSERT INTO Location VALUES (?,?,?,?,?,?,?);', (i, location, lat, lng, x, y, z))
 
-	for data_tuple in data_list:
-		c.execute('INSERT INTO edata VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', data_tuple)
-		outF.write(str(data_tuple)+'\n')
-	outF.close()
+	# TABLE Substances
+	# Substance_ID | Substance_Name | MDMA | Enactogen | Psychedelic | Cannabinoid | Dissocciative |
+	# Stimulant | Depressant | Other
+	c.execute("""CREATE TABLE Substance (
+		Substance_ID integer,
+		Substance_Name text,
+		MDMA real,
+		Enactogen real,
+		Psychedelic real,
+		Cannabinoid real,
+		Dissociative real,
+		Stimulant real,
+		Depressant real,
+		Other real
+		);""")
+	substance_list = clss.ecstasy_like + clss.psychedelics + clss.cannabinoids + \
+		clss.dissociatives + clss.stimulants + clss.depressants + clss.silent_others
+	for data_tup in data_list:
+		substance_names = list(list(zip(*data_tup[5]))[0])
+		substance_list += substance_names
+	substance_table = _substance_table(substance_list)
+	for substance_data_tuple in substance_table:
+		c.execute('INSERT INTO Substance VALUES (?,?,?,?,?,?,?,?,?,?);', substance_data_tuple)
+
+	# TABLE Pill_Content
+	# Pill_ID | SubstanceID | Substance_Parts | Substance_Percentage
+	c.execute("""CREATE TABLE Pill_Content_Names (
+		Pill_ID integer,
+		Substance_Name text
+		Substance_Parts real,
+		Substance_Percentage real
+		);""")
+	for data_tup in data_list:
+		pill_id = dat_tup[0]
+		composition = data_tup[5]
+		total_parts = sum(x[1] for x in composition)
+		for substance, part in composition:
+			percentage = part/total_parts
+			c.execute('INSERT INTO Pill_Content VALUES (?,?,?,?);', (pill_id, substance, part, percentage))
+	# Now we need to change all the names into ids
+	c.execute("""CREATE TABLE Pill_Content AS
+		SELECT
+			Pill_Content_Names.Pill_ID,
+			Substance.Substance_ID
+			Pill_Content_Names.Substance_Parts,
+			Pill_Content_Names.Substance_Percentage
+		FROM
+			Pill_Content_Names, Substance
+		WHERE
+			Pill_Content_Names.Substance_Name = Substance.Substance_Name
+		;""")
+	c.execute('DROP TABLE Pill_Content_Names;')
+
+	# TABLE Pill_Misc
+	# Pill_ID | Location_ID | Date_Normalized | Sold_As_Ecstasy | Date | URL | Name | Other_Name | Dose
+	c.execute("""CREATE TABLE Pill_Misc_Name (
+		Pill_ID integer,
+		Location_Name text,
+		Date_Normalized real,
+		Sold_As_Ecstasy integer,
+		Date text,
+		URL text,
+		Name text,
+		Other_Name text,
+		Dose integer
+		);""")
+	# (DataDataID integer, URL text, Name text, OtherName text,
+	# 	SoldAsEcstasy integer, composition, Date datetime.datetime,
+	# 	loc str, Dose integer)
+	dates = [x[6] for x in data_list]
+	start_date = min(dates).toordinal()
+	end_date = max(dates).toordinal()
+	def __normalize_date(date): return (date.toordinal()-x)/(y-x)
+	for data_tup in data_list:
+		pill_id = dat_tup[0]
+		location_name = dat_tup[7]
+		sold_as_ecstasy = dat_tup[4]
+		date = dat_tup[6]
+		date_normalized = __normalize_date(date)
+		url = dat_tup[1]
+		name = dat_tup[2]
+		other_name = dat_tup[3]
+		dose = dat_tup[8]
+		table_tuple = (pill_id, location_name, date_normalized, sold_as_ecstasy, \
+			date, url, name, other_name, dose)
+		c.execute('INSERT INTO Pill_Misc_Name VALUES (?,?,?,?,?,?,?,?,?);', table_tuple)
+
+	c.execute(""" CREATE TABLE Pill_Misc AS
+		SELECT
+			Pill_Misc_Name.Pill_ID,
+			Location.Location_ID,
+			Pill_Misc_Name.Date_Normalized,
+			Pill_Misc_Name.Sold_As_Ecstasy,
+			Pill_Misc_Name.Date,
+			Pill_Misc_Name.URL,
+			Pill_Misc_Name.Name,
+			Pill_Misc_Name.Other_Name,
+			Pill_Misc_Name.Dose
+		FROM
+			Pill_Misc_Name, Location
+		WHERE
+			Pill_Misc_Name.Location_Name = Location.Location_Name
+		;""")
+
+	# VIEW SOM_Data
+	# Pill_ID | Date | X | Y | Z | MDMA_Content | Enactogen_Content | Psychedelic_Content
+	# | Cannabinoid_Content | Dissociative_Content | Stimulant_Content | Depressant_Content
+	# | Other
+	c.execute("""CREATE VIEW Pill_Classification AS
+		SELECT
+		    Pill_Misc.Pill_ID,
+		    Pill_Misc.Date,
+		    Location.X,
+		    Location.Y,
+		    Location.Z,
+		    SUM(Pill_Content.Substance_Percentage * Substance.MDMA ) as MDMA_Content,
+		    SUM(Pill_Content.Substance_Percentage * Substance.Enactogen) as Enactogen_Content,
+		    SUM(Pill_Content.Substance_Percentage * Substance.Psychedelic) as Psychedelic_Content,
+		    SUM(Pill_Content.Substance_Percentage * Substance.Cannabinoid ) as Cannabinoid_Content,
+		    SUM(Pill_Content.Substance_Percentage * Substance.Dissociative) as Dissociative_Content,
+		    SUM(Pill_Content.Substance_Percentage * Substance.Stimulant ) as Stimulant_Content,
+		    SUM(Pill_Content.Substance_Percentage * Substance.Depressant) as Depressant_Content,
+		    SUM(Pill_Content.Substance_Percentage * Substance.Other) as Other_Content
+		FROM
+		    Pill_Misc, Pill_Content, Substance, Location, Pill_Misc
+		WHERE Pill_Misc.Pill_ID = Pill_Content.Pill_ID
+		AND Pill_Misc.Location_ID = Location.Location_ID
+		AND Pill_Content.Substance_ID = Substances.Substance_ID
+		GROUP BY Pill.Pill_ID
+	;""")
 
 	conn.commit()
 	conn.close()
