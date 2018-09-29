@@ -55,9 +55,11 @@ def x_y_z_to_lat_lng(x, y, z, radians = False):
 		lng = lng*180/np.pi
 	return (lat, lng)
 
-def plot_xyz(lat_lon_v_list, box_size = 6, cmap_name = 'Purples', title = '', path=None):
+def plot_latlng(lat_lon_v_list, box_size = 6, cmap_name = 'Purples', title = '', path=None, \
+	z_min=0, z_max=1, llcrnrlat=-58, llcrnrlon=-180, urcrnrlat=75, urcrnrlon=180, mode='average',
+	default_range=False, cb_label='(as a portion of active substances)', logplot = False):
 	"""
-	Plots the xyz columns of a database with some value represented as well.
+	Plots the latitude and longitude columns of a database with some value represented as well.
 
 	Args:
 		lat_lon_v_list: List of the format [(lat, lng, v), ...]
@@ -67,16 +69,23 @@ def plot_xyz(lat_lon_v_list, box_size = 6, cmap_name = 'Purples', title = '', pa
 		title = '': Title for plot
 		path = None: If a string is given, the plot is saved to that location. Otherwise
 		just displays to screen.
-
+		z_min: Default 0. Minimum value for the color scale.
+		z_max: Default 1. Maximum value for the color scale.
+		lat_0: The latitude of the center of the map
+		lon_0: The longitude of the center of the map
+		width: The width of the map in the projection units
+		height: The height of the map in the projection units
 
 	Returns:
 		0: Plot object
 	"""
 	# Do the coarse graining
-	number_of_lons = int(360/box_size)
-	number_of_lats = int(180/box_size)
-	lat_space = np.linspace(-90,90,number_of_lats+1)
-	lon_space = np.linspace(0,360,number_of_lons+1)
+	width = urcrnrlon-llcrnrlon
+	height = urcrnrlat-llcrnrlat
+	number_of_lons = int(width/box_size)
+	number_of_lats = int(height/box_size)
+	lat_space = np.linspace(llcrnrlat,urcrnrlat,number_of_lats+1)
+	lon_space = np.linspace(llcrnrlon,urcrnrlon,number_of_lons+1)
 
 	# Build the x and y grid for lat and lon
 	x = np.zeros((number_of_lats+1, number_of_lons+1))
@@ -90,6 +99,9 @@ def plot_xyz(lat_lon_v_list, box_size = 6, cmap_name = 'Purples', title = '', pa
 	z_sum = np.zeros((number_of_lats, number_of_lons))
 	z_number = np.zeros((number_of_lats, number_of_lons))
 	for lat, lon, v in lat_lon_v_list:
+		if lat < llcrnrlat or lat > urcrnrlat or lon < llcrnrlon or lon > urcrnrlon:
+			# Out of range:
+			continue
 		# Find grid spot
 		i = bisect.bisect_left(lat_space, lat)-1
 		if i == -1:
@@ -100,25 +112,43 @@ def plot_xyz(lat_lon_v_list, box_size = 6, cmap_name = 'Purples', title = '', pa
 		# Insert data
 		z_sum[i,j] += v
 		z_number[i,j] += 1
-	z = z_sum/z_number
+	if mode == 'sum':
+		z = z_sum
+	elif mode == 'average':
+		z = z_sum/z_number
 	# Deal with places with no data
-	z = np.ma.masked_invalid(z)
+	z = np.ma.masked_where(z_number==0, z)
+
 	# Time to plot
-	m = Basemap(projection='robin', lon_0 = 0)
+	m = Basemap(projection='merc', resolution='l', \
+		llcrnrlat=llcrnrlat, llcrnrlon=llcrnrlon, urcrnrlat=urcrnrlat, urcrnrlon=urcrnrlon)
 	m.drawcoastlines()
 	m.drawcountries()
+	m.drawstates()
 
 	palette = copy.copy(plt.cm.get_cmap(name=cmap_name))
 	palette.set_bad('#c2c3c4', 1.0)
 
-	cs = m.pcolormesh(x, y, z, latlon=True, cmap=palette)
+	if logplot:
+		norm = matplotlib.colors.LogNorm()
+	else:
+		norm = matplotlib.colors.Normalize()
+
+	if default_range:
+		cs = m.pcolormesh(x, y, z, latlon=True, cmap=palette, norm=norm)
+	else:
+		cs = m.pcolormesh(x, y, z, latlon=True, cmap=palette, vmin=z_min,vmax=z_max, norm=norm)
 
 	cbar = m.colorbar(cs, location='bottom', pad="5%")
-	cbar.set_label('(as a portion of active substances)')
+	cbar.set_label(cb_label)
 
 	plt.title(title)
 
-	plt.show()
+	if path == None:
+		plt.show()
+	else:
+		plt.savefig(path)
+		plt.clf()
 
 
 

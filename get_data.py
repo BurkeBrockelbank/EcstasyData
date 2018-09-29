@@ -639,9 +639,29 @@ def _list_to_database(path, data_list):
 		WHERE Pill_Misc.Pill_ID = Pill_Content.Pill_ID
 		AND Pill_Misc.Location_ID = Location.Location_ID
 		AND Pill_Content.Substance_ID = Substance.Substance_ID
+		AND Pill_Misc.SoldAsEcstasy = 1
 		GROUP BY Pill_Misc.Pill_ID
 	;""")
 
+	c.execute("""CREATE VIEW Content_Map AS
+		SELECT
+			Date_Normalized,
+			Latitude,
+			Longitude,
+			MDMA_Content,
+			Enactogen_Content,
+			Psychedelic_Content,
+			Cannabinoid_Content,
+			Dissociative_Content,
+			Stimulant_Content,
+			Depressant_Content,
+			Other_Content
+		FROM
+			SOM_Classification, Location
+		WHERE
+			SOM_Classification.X = Location.X
+			AND SOM_Classification.Y = Location.Y
+			AND SOM_Classification.Z = Location.Z;""")
 
 	conn.commit()
 	conn.close()
