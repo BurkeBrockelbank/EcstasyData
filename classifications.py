@@ -4,6 +4,9 @@ This program contains data for classifying drugs by their effects.
 Project: EcstasyData
 Path: root/classifications.py
 """
+# MDMA
+MDMA = ['MDMA']
+
 # Enactogens
 ecstasy_like = ['MDA', 'MDE', '4-FA', 'Methylone', 'bk-DMBDB', 'bk-MDDMA', 'Ethylone', '4-Methylmethcathinone', \
 	'bk-MBDB', '5-MAPB', '6-APB', '5-APDB', '5-EAPB', '5-APB', 'AMT', '3-Methylmethcathinone', '4-Ethylmethcathinone', \
@@ -45,6 +48,7 @@ barbiturates = ['Butabarbital', 'Phenobarbital', 'Barbital', 'Pentobarbital', 'B
 depressants = ['Zolpidem', 'Amitriptyline',  'Carisoprodol', 'Diphenhydramine', 'Methaqualone'] + opioids + benzodiazepines + barbiturates
 
 # Other
+research_chemicals = ['4-Chloro-N,N-Dimethylcathinone']
 precursors_intermediates_byproducts = ['MMDPPA', 'MDA 2-amido analog', '1-(3,4-methylenedioxyphenyl)-2-propanol', '4-ANPP', 'MDP2P']
 no_effect = ['Acetaminophen', 'Sugar', 'Aspirin', 'Methyl Salicylate', 'PMMA', 'Ibuprofen', 'Vitamin E', 'Oleic Acid', 'Palmitic Acid', \
 	'Stearic Acid', 'Linoleic acid', 'Finasteride', 'Phthalates', 'Methylecgonidine', 'Triethyl citrate']
@@ -55,7 +59,7 @@ misc_others = ['Chlorpheniramine', 'Guaifenesin', 'Phenylpropanolamine', 'Niacin
 	'Benocyclidine', 'MDA 2-aldoxime analog', 'MDMA Methylene homolog', 'Melatonin', 'Sildenafil', 'Tadalafil', \
 	'Stanozolol', 'Sibutramine', 'Diclofenac', 'Aceclofenac', 'W-15', 'Theophylline', \
 	'Unidentified', 'Other Pharm.', 'Synthesis Byproducts', 'Other', 'None detected', 'Trace detected']
-silent_others = no_effect + misc_others + steroids + nootropics + precursors_intermediates_byproducts
+silent_others = no_effect + misc_others + steroids + nootropics + precursors_intermediates_byproducts + research_chemicals
 
 aliases_for_nothing = ['Not tested', 'Not Tested', '', 'Not tested:', 'Not Tested:', 'Not tested:---', 'Not Tested:---', \
 	'Not tested:1', 'Not Tested:1', 'On Hold - See Note:0', 'On Hold - See Note:', 'On Hold - See Note:1']
