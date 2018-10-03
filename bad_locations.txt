@@ -21,8 +21,6 @@
 1    Pavemount, CA
 1    Playa Del Camen, Quintana Roo, Mexico
 1    Randolf, VT
-1    Sacramento, CA
-1    Saint Nicholas, Quebec, Canada
 1    San Bernadino, CA
 1    Santa Monica, CA, India
 1    Silersprings, MD
