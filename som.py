@@ -49,21 +49,42 @@ class ClassifiedSOM(MiniSom):
 	"""
 	def __init__(self, data_list, dimensions=None, sigma=1.0, learning_rate=0.5,
        	decay_function=minisom.asymptotic_decay,
-		neighborhood_function='gaussian', random_seed=None):
-
-		self.data_raw = data_raw
-		if dimensions == None:
-			samples = len(self.data_list)
-			neurons = 5*np.sqrt(samples)
-			width = int(np.ceil(np.sqrt(neurons))
-			x = width
-			y = width
-		else:
-			x, y = dimensions
+		neighborhood_function='gaussian', random_seed=None, ignore_date = True):
+        pass
+        self.data_raw = data_raw
+        if dimensions == None:
+            samples = len(self.data_list)
+            neurons = 5*np.sqrt(samples)
+            width = int(np.ceil(np.sqrt(neurons)))
+            x = width
+            y = width
+        else:
+            x, y = dimensions
 
 		super(ClassifiedSOM, self).__init__(x, y, 12, sigma=sigma,
 			learning_rate=learning_rate, decay_function=decay_function,
 			neighborhood_function=neighborhood_function, random_seed=random_seed)
 
         self.data = [x[1:] for x in self.data_raw]
+        if ignore_date:
+            self.data = [x[1:] for x in self.data_raw]
+        else:
+            # Need to normalize all the dates. First change everything to ordinals
+            self.data = map(lambda x: [x[0].toordinal()] + x[1:], self.data)
+            all_dates = [x[0] for x in self.data]
+            start_date = min(all_dates)
+            end_date = max(all_dates)
+            def __normalize_date(date_ordinal):
+                return (date_ordinal - start_date)/(end_date-start_date)
+            self.data = map(lambda x : [__normalize_date(x[0])] + x[1:], self.data)
         self.data = np.array(self.data)
+
+    def train(N):
+        """
+        Train the SOM.
+
+        Args:
+            N : Integer
+                The number of iterations to train for.
+        """
+        self.train_random(self.data, N)

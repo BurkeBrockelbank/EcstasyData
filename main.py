@@ -12,6 +12,8 @@ import sqlite3
 
 import os
 
+import pickle
+
 db_path = 'EcstasyData.sqlite'
 
 db = get_data.EDataDB('Location.sqlite')
