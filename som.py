@@ -5,22 +5,21 @@ Project: EcstasyData
 Path: root/som.py
 """
 
-from minisom import MiniSom
 import minisom
 
 import numpy as np
 
-class ClassifiedSOM(MiniSom):
-	"""
-	This object holds data for training the SOM and also has some features for interfacing with it.
+class ClassifiedSOM(minisom.MiniSom):
+    """
+    This object holds data for training the SOM and also has some features for interfacing with it.
 
-	Args:
-		data_list: List of tuples of the form:
-			[(Pill_ID, Date, X, Y, Z, MDMA, Enactogen, Psychedelic, Cannabinoid, Dissociative,
-			  Stimulant, Depressant, Other),...]
-			containing all the data for pills collected.
-		dimensions: int tuple, optional (default=5*sqrt(samples))
-			(x, y) dimensions of the SOM (2D)
+    Args:
+        data_list: List of tuples of the form:
+            [(Pill_ID, Date, X, Y, Z, MDMA, Enactogen, Psychedelic, Cannabinoid, Dissociative,
+              Stimulant, Depressant, Other),...]
+            containing all the data for pills collected.
+        dimensions: int tuple, optional (default=5*sqrt(samples))
+            (x, y) dimensions of the SOM (2D)
         sigma : float, optional (default=1.0)
             Spread of the neighborhood function, needs to be adequate
             to the dimensions of the map.
@@ -46,11 +45,11 @@ class ClassifiedSOM(MiniSom):
             possible values: 'gaussian', 'mexican_hat', 'bubble'
         random_seed : int, optional (default=None)
             Random seed to use.
-	"""
-	def __init__(self, data_list, dimensions=None, sigma=1.0, learning_rate=0.5,
-       	decay_function=minisom.asymptotic_decay,
-		neighborhood_function='gaussian', random_seed=None, ignore_date = True):
-        pass
+    """
+    def __init__(self, data_list, dimensions=None, sigma=1.0, learning_rate=0.5,
+        decay_function = None,
+        neighborhood_function='gaussian', random_seed=None, ignore_date = True):
+
         self.data_raw = data_raw
         if dimensions == None:
             samples = len(self.data_list)
@@ -61,9 +60,9 @@ class ClassifiedSOM(MiniSom):
         else:
             x, y = dimensions
 
-		super(ClassifiedSOM, self).__init__(x, y, 12, sigma=sigma,
-			learning_rate=learning_rate, decay_function=decay_function,
-			neighborhood_function=neighborhood_function, random_seed=random_seed)
+        super(ClassifiedSOM, self).__init__(x, y, 12, sigma=sigma,
+            learning_rate=learning_rate, decay_function = None,
+            neighborhood_function=neighborhood_function, random_seed=random_seed)
 
         self.data = [x[1:] for x in self.data_raw]
         if ignore_date:

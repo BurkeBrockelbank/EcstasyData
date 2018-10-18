@@ -14,19 +14,19 @@ import os
 
 import pickle
 
+import som
+
 db_path = 'EcstasyData.sqlite'
 
-db = get_data.EDataDB('Location.sqlite')
+# db = get_data.EDataDB('Location.sqlite')
 # db.new_copy('EcstasyData.sqlite')
-db.open()
+# db.open()
 # db.initialize()
-db.add_location_alias('Saint Nicholas, Quebec, Canada', '46.6952° N, 71.3855° W')
 # db.load_url('https://www.ecstasydata.org/search.php')
-
 # db.dump_unknown_substances('unknown_substances.txt')
 # db.dump_bad_locations('bad_locations.txt')
-db.commit()
-db.close()
+# db.commit()
+# db.close()
 
 # get_data.create_database('https://www.ecstasydata.org/search.php?source=1&Max=5000&style=data_only', db_path)
 
@@ -108,3 +108,8 @@ def plot_content(in_path, content_string, out_path=None, title='', box_size=6, m
 # plot_content(db_path, 'Depressant_Content as Content', out_path='Content_Plots\\Depressant_UK.png', title='Depressant Content (United Kingdom)', llcrnrlat=49.5, llcrnrlon=-12, urcrnrlat=59, urcrnrlon=4, box_size=0.5)
 # plot_content(db_path, 'Other_Content as Content', out_path='Content_Plots\\Other_UK.png', title='Other Content (United Kingdom)', llcrnrlat=49.5, llcrnrlon=-12, urcrnrlat=59, urcrnrlon=4, box_size=0.5)
 
+################### SOM ANALYSIS ############################
+# Create an som
+with get_data.EDataDB('EcstasyData.sqlite') as db:
+	db.c.execute('SELECT * FROM SOM_Data;')
+	somap = som.ClassifiedSOM(db.c.fetchall(), random_seed=21893698)

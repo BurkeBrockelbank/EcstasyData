@@ -140,6 +140,7 @@
 1    Myristic Acid
 1    N,N-Dimethylamphetamine
 1    N-Acetylmethamphetamine
+1    N-Methyl-1-phenylpropan-1-amine
 1    N-Methylindan-2-amine
 1    N-Phenylacetyl-L-prolylglycine ethyl ester
 1    NMT

@@ -270,7 +270,7 @@ class EDataDB:
 				URL TEXT,
 				Name TEXT,
 				Other_Name TEXT,
-				Dose INTEGER
+				Dose REAL
 			);
 		""")
 
@@ -291,7 +291,8 @@ class EDataDB:
 				    Pill_Misc, Pill_Content, Substance, Location
 				WHERE Pill_Misc.Pill_ID = Pill_Content.Pill_ID
 					AND Pill_Content.Substance_ID = Substance.Substance_ID
-					AND Pill_Misc.SoldAsEcstasy = 1
+					AND Pill_Misc.Sold_As_Ecstasy = 1
+					AND Pill_Misc.Location_ID = Location.Location_ID
 					AND Location.X IS NOT NULL
 					AND Location.Y IS NOT NULL
 					AND Location.Z IS NOT NULL
@@ -351,9 +352,9 @@ class EDataDB:
 			0 : Integer
 				The ID of the location.
 		"""
-		self.add_location_alias(location_string, location_string)
+		return self.add_location_alias(location_string, location_string)
 
-	def add_location_alias(self, location_string, alias):
+	def add_location_alias(self, location_string, alias, fix_null = False):
 		"""
 		Adds a location to the location table. Querying the geocoder if necessary.
 
@@ -388,7 +389,7 @@ class EDataDB:
 			self.c.execute('SELECT * FROM Location WHERE Location_Name = ?', (location_string,))
 			location_ID, name, lat, lon, X, Y, Z = self.c.fetchone()
 			# Check if the line has null values
-			if lat == None or lon == None or X == None or Y == None or Z == None:
+			if fix_null and (lat == None or lon == None or X == None or Y == None or Z == None):
 				# Look for coordinates
 				try:
 					latitude, longitude, x, y, z = get_coordinates(alias)
@@ -473,8 +474,8 @@ class EDataDB:
 	def load_html_line(self, line):
 		"""
 		Parses data in the form,
-		DataDataID|URL|ThumbnailURL|DetailImage1|ReagentImage1|Name|OtherName|SubmitterDigitCode|SoldAsEcstasy|Substance (sep by ;;)|DatePublished|DateTested (approx)|LocationString|SizeString|DataSource
-		
+		DataDataID|URL|ThumbnailURL|DetailImage1|ReagentImage1|Name|OtherName|SubmitterDigitCode|SoldAsEcstasy|
+		Substance (sep by ;;)|DatePublished|DateTested (approx)|LocationString|SizeString|DataSource
 		and adds it to the database.
 		"""
 		raw_tuple = line.split('|')
@@ -530,6 +531,8 @@ class EDataDB:
 		if dose != 0:
 			pill_misc_data.append(dose)
 		pill_misc_data = tuple(pill_misc_data)
+		# print('INSERT INTO Pill_Misc VALUES '+pill_misc_format+';', pill_misc_data)
+		# exit()
 		self.c.execute('INSERT INTO Pill_Misc VALUES '+pill_misc_format+';', pill_misc_data)
 
 		# Now we want to add to Pill_Content.
@@ -608,15 +611,16 @@ class EDataDB:
 			0: Integer
 		"""
 		# If the dose was not recorded:	
-		if dose_str == '' or '-':
+		if dose_str in ['', '-']:
 			return 0
-		
 		# Get the numeric part
 		try:
-			mg_dose = int(dose_str[:dose_str.index(' ')])
+			number_tag = re.compile('[0-9]+\.*[0-9]* mg')
+			numeric = number_tag.search(dose_str).group()
+			# Remove the mg suffix (this is assumed)
+			mg_dose = float(numeric.rstrip(' mg'))
 			return mg_dose
-		except:
-			warnings.warn('Could not read dosage ' + dose_str)
+		except AttributeError:
 			return 0
 
 	def _parse_substance_str(self, substance_str):
