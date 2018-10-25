@@ -62,6 +62,8 @@ I am building the database! I have noticed that many of the locations are actual
 October 1 - : SOMs
 I am using MiniSOM to do my SOM.
 
+I have successfully traines some SOMs and plotted activation response and distance maps.
+
 OTHER NOTES:
 Analysis idea. After the SOM is formed, each node can be tested to find the total distance from all data points. These sums can be normalized and plotted on a u-matrix, which will be able to show us classifications. I.e. if a certain bunch of nodes have high sums with a border of low sums, then we know that these nodes make up a class.
 

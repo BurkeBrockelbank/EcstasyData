@@ -7,6 +7,7 @@ Path: root/main.py
 import get_data
 import visualizer as vis
 import classifications as clss
+import som
 
 import sqlite3
 
@@ -14,7 +15,12 @@ import os
 
 import pickle
 
-import som
+import numpy as np
+
+import matplotlib.pyplot as plt
+from matplotlib.colors import LogNorm
+
+import datetime
 
 db_path = 'EcstasyData.sqlite'
 
@@ -109,7 +115,50 @@ def plot_content(in_path, content_string, out_path=None, title='', box_size=6, m
 # plot_content(db_path, 'Other_Content as Content', out_path='Content_Plots\\Other_UK.png', title='Other Content (United Kingdom)', llcrnrlat=49.5, llcrnrlon=-12, urcrnrlat=59, urcrnrlon=4, box_size=0.5)
 
 ################### SOM ANALYSIS ############################
-# Create an som
-with get_data.EDataDB('EcstasyData.sqlite') as db:
-	db.c.execute('SELECT * FROM SOM_Data;')
-	somap = som.ClassifiedSOM(db.c.fetchall(), random_seed=21893698)
+def build_SOM(db_path, query, N, path = None, random_seed=21893698):
+	# Create a som
+	with get_data.EDataDB(db_path) as db:
+		db.open()
+		db.c.execute(query)
+		somap = som.ClassifiedSOM(db.c.fetchall(), random_seed=random_seed)
+
+	# Train SOM
+	somap.train(N)
+
+	# Generate informative maps
+	somap.generate_distance_map()
+	somap.generate_activation_response()
+
+	# Save SOM
+	if path != None:
+		with open(path, 'wb') as out_f:
+			pickle.dump(somap, out_f)
+	return somap
+
+# # Testing non-pure ecstasy pills
+# somap = build_SOM(db_path, """
+# 		SELECT * FROM SOM_Data
+# 		WHERE
+# 			MDMA_Content < 1
+# 		AND
+# 			date(Date) BETWEEN date('2008-01-01') AND date('2019-01-01')
+# 		""",
+# 		N = 1000000,
+# 		path = 'pickles/som_2008-2018_nonpure_1000000.pickle')
+
+# N_str = '1000000'
+
+# with open('pickles/som_2008-2018_nonpure_%s.pickle' % (N_str, ), 'rb') as in_f:
+# 	somap = pickle.load(in_f)
+
+# somap.plot_distance_map(path='SOM_Plots/ActivationResponse_2008-2018_nonpure_%s.png' % (N_str, ))
+# somap.plot_activation_response('SOM_Plots/DistanceMap_2008-2018_nonpure_%s.png' % (N_str, ))
+
+with open('pickles/som_2008-2018_nonpure_100000.pickle', 'rb') as in_f:
+	somap = pickle.load(in_f)
+
+somap.generate_distance_map()
+# somap.generate_activation_response()
+
+clusters = [[(0,0),(0,1)]
+cluster_values = []

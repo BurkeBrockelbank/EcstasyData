@@ -751,3 +751,9 @@ class EDataDB:
 		# Add the proper flags to the url and load
 		print(url+'?&Max=%s&style=data_only' % (n_data,))
 		self.load_data_only_url(url+'?&Max=%s&style=data_only' % (n_data,))
+
+	def __enter__(self):
+		return self
+
+	def __exit__(self, exception_type, exception_value, traceback):
+		self.close()
