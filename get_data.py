@@ -7,6 +7,7 @@ Path: root/get_data.py
 
 import classifications as clss
 import visualizer as vis
+import exceptions
 
 import urllib.request
 import sqlite3
@@ -29,36 +30,6 @@ import progressbar
 import shutil
 
 import US_States
-
-class SubstanceError(Exception):
-    """
-    Raised when there is an issue parsing substances
-    """
-    pass
-
-class ClassificationError(Exception):
-    """
-    Raised for errors classifying substances.
-    """
-    pass
-
-class TestingError(Exception):
-    """
-    Raised when the sample wasn't tested
-    """
-    pass
-
-class LocationError(Exception):
-    """
-    Raised when the location isn't specified well.
-    """
-    pass
-
-class UnidentifiedError(Exception):
-    """
-    Raised when there is an issue parsing substances
-    """
-    pass
 
 def custom_formatwarning(msg, *args, **kwargs):
     # ignore everything except the message
@@ -105,7 +76,7 @@ def get_coordinates(location_str, no_query=False, replace_US_states = True):
 	loc_query = loc_query.rstrip().lstrip()
 
 	if location_str.rstrip() == '' or loc_query.rstrip() == '':
-		raise LocationError(location_str + ' is empty')
+		raise exceptions.LocationError(location_str + ' is empty')
 
 	# Create a client to query.
 	with open('API\\TomTom') as f:
@@ -125,10 +96,10 @@ def get_coordinates(location_str, no_query=False, replace_US_states = True):
 			location = geolocator.geocode(loc_query)
 
 	except geopy.exc.GeocoderTimedOut:
-		raise LocationError(location_str + ' interpreted as ' + loc_query)
+		raise exceptions.LocationError(location_str + ' interpreted as ' + loc_query)
 
 	if location == None:
-		raise LocationError(location_str)
+		raise exceptions.LocationError(location_str)
 	xyz = vis.lat_lng_to_x_y_z(location.latitude, location.longitude)
 	x, y, z = xyz
 	return location.latitude, location.longitude, x, y, z
@@ -374,7 +345,7 @@ class EDataDB:
 					INSERT INTO Location
 					VALUES (null, ?, ?, ?, ?, ?, ?);
 				""", (location_string, latitude, longitude, x, y, z))
-			except LocationError as e:
+			except exceptions.LocationError as e:
 				if location_string not in self.bad_locations.keys():
 					self.bad_locations[location_string] = 0
 				self.bad_locations[location_string] += 1
@@ -404,7 +375,7 @@ class EDataDB:
 						WHERE
 							Location_ID == ?;
 					""", (latitude, longitude, x, y, z, location_ID))
-				except LocationError as e:
+				except exceptions.LocationError as e:
 					pass
 			return location_ID
 
@@ -440,8 +411,8 @@ class EDataDB:
 			# We don't have this substance
 			try:
 				classification = classifier(substance_string)
-			except ClassificationError:
-				raise ClassificationError(substance_string)
+			except exceptions.ClassificationError:
+				raise exceptions.ClassificationError(substance_string)
 			insertion_tuple = (substance_string,) + classification
 			self.c.execute("""
 				INSERT INTO Substance
@@ -571,7 +542,7 @@ class EDataDB:
 		elif substance_str in clss.silent_others:
 			classification_index = 7
 		elif warn_other:
-			raise ClassificationError(substance)
+			raise exceptions.ClassificationError(substance)
 		else:
 			classification_index = 7
 			if substance_str not in self.unknown_substance_count.keys():
@@ -636,7 +607,7 @@ class EDataDB:
 		"""
 		# Deal with untested
 		if substance_str in clss.aliases_for_nothing:
-			raise TestingError(substance_str)
+			raise exceptions.TestingError(substance_str)
 		# Deal with sugar pills
 		if 'None Detected' in substance_str:
 			return [('None detected', 1.0, 1.0)]
@@ -661,7 +632,7 @@ class EDataDB:
 					try:
 						part = float(part)
 					except:
-						raise SubstanceError(substance_str)
+						raise exceptions.SubstanceError(substance_str)
 					substance_parts.append(part)
 
 		# Convert parts to percentages
@@ -722,9 +693,9 @@ class EDataDB:
 			bar.update(line_no)
 			try:
 				self.load_html_line(line)
-			except TestingError:
+			except exceptions.TestingError:
 				self.bad_pills.append(int(line.split('|')[0]))
-			except SubstanceError:
+			except exceptions.SubstanceError:
 				self.bad_pills.append(int(line.split('|')[0]))
 		bar.finish()
 		print('{}/{} pills failed to be added ({:.1f}%)'.format(\

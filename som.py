@@ -14,6 +14,8 @@ import progressbar
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 
+import exceptions
+
 class ClassifiedSOM(minisom.MiniSom):
     """
     This object holds data for training the SOM and also has some features for interfacing with it.
@@ -65,6 +67,8 @@ class ClassifiedSOM(minisom.MiniSom):
         else:
             x, y = dimensions
 
+        self.shape = (x,y)
+
         self.features = 12 - ignore_date
 
         super(ClassifiedSOM, self).__init__(x, y, self.features, sigma=sigma,
@@ -87,6 +91,8 @@ class ClassifiedSOM(minisom.MiniSom):
 
         self.dist_map = None
         self.act_resp = None
+        self.cluster_map = -np.ones(self.shape, dtype = int)
+        self.cluster_weights = np.zeros(self.shape + (1,)*self.features)
 
     def train(self, num_iteration):
         """
@@ -146,7 +152,48 @@ class ClassifiedSOM(minisom.MiniSom):
         else:
             plt.show()
 
-    def cluster_weight(self, center_index, threshold):
+    def plot_clusters(self, path=None):
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        cax = ax.matshow(self.cluster_map, interpolation='nearest', vmin = 0)
+        fig.colorbar(cax)
+        plt.title('Distance Map')
+
+        if path != None:
+            plt.savefig(path)
+        else:
+            plt.show()
+
+    def cluster_indeces(self, center_index, threshold):
+        """
+        Finds the indeces of a cluster given the center index and the threshold.
+
+        Args:
+            center_index : integer 2-tuple
+                Index for the center of the cluster search.
+            threshold : float
+                Distance threshold for inclusion in the cluster.
+        """
+        if self.dist_map is None:
+            self.generate_distance_map()
+
+        cluster_indeces = set([])
+        unchecked_indeces = set([center_index])
+        while len(unchecked_indeces) > 0:
+            new_unchecked_indeces = set([])
+
+            for index in unchecked_indeces:
+                if self.dist_map[index] <= threshold:
+                    cluster_indeces.add(index)
+                    for neighbor_index in self.__neighbors(index):
+                        if neighbor_index not in cluster_indeces:
+                            new_unchecked_indeces.add(neighbor_index)
+
+            unchecked_indeces = new_unchecked_indeces
+
+        return list(cluster_indeces)
+
+    def cluster_weight(self, center_index, threshold, cluster_indeces = None):
         """
         This function takes in a index for a cluster center unit and finds all the units closeby
         (maximum step of threshold away in distance map). It then does a weighted average on all
@@ -160,34 +207,18 @@ class ClassifiedSOM(minisom.MiniSom):
                 Distance threshold for inclusion in the cluster.
 
         Returns:
-            0 : float
+            0 : float, numpy array
                 The average weight of the cluster
             1 : integer
                 The number of data points in the cluster
             2 : integer list of 2-tuples
                 All the indeces included in the cluster.
         """
-        if self.dist_map is None:
-            self.generate_distance_map()
+        if cluster_indeces is None:
+            cluster_indeces = self.cluster_indeces(center_index, threshold)
 
         if self.act_resp is None:
             self.generate_activation_response()
-
-        cluster_indeces = set([])
-        unchecked_indeces = set([center_index])
-        added = True
-        if added:
-            added = False
-            starting_cluster_size = len(cluster_indeces)
-
-            for index in unchecked_indeces:
-                if self.dist_map[index] <= threshold:
-                    cluster_indeces.add(index)
-                    new_unchecked_indeces.add(self.__neighbors(index))
-
-
-            if len(cluster_indeces) > starting_cluster_size:
-                added = True
 
         total_activation = 0
         unit_sum = 0
@@ -207,12 +238,58 @@ class ClassifiedSOM(minisom.MiniSom):
             for jp in [-1, 0, 1]:
                 if ip != 0 or jp != 0:
                     neighbor = (i+ip, j+jp)
-                    if neighbor[0] < 0 or neighbor[1] < 0 or \
-                        neighbor[0] >= self.dimensions[0] or \
-                        neighbor[1] >= self.dimensions[1]:
+                    # If the neighbor is in bounds, add it to the list of neighbors
+                    if not(neighbor[0] < 0 or neighbor[1] < 0 or \
+                        neighbor[0] >= self.shape[0] or \
+                        neighbor[1] >= self.shape[1]):
                         neighbors.append(neighbor)
         return neighbors
 
+    def add_cluster(self, average_weight, total_activation, cluster_indeces):
+        """
+        Puts a cluster into the cluster map.
+
+        Args:
+            average_weight : float, numpy array
+                The average weight of the cluster
+            total_activation : integer
+                The number of data points in the cluster
+            cluster_indeces : integer list of 2-tuples
+                All the indeces included in the cluster.
+        """
+        for index in cluster_indeces:
+            # Overlapping clusters!
+            if self.cluster_map[index] != -1:
+                raise exceptions.ClusterError('Clusters overlapping at ' + str(index) + str(self.cluster_map[index]))
+            else:
+                self.cluster_map[index] = total_activation
+                self.cluster_weights[index] = average_weight
+
+    def remove_cluster(self, center_index, threshold, cluster_indeces = None):
+        """
+        Removes the cluster containing index.
+
+        Args:
+            center_index : integer 2-tuple
+                One index in the cluster you want removed.
+        """
+        if cluster_indeces is None:
+            cluster_indeces = self.cluster_indeces(center_index, threshold)
+
+        for index in cluster_indeces:
+            self.cluster_map[index] = -1
+            self.cluster_weights_index[index].fill(0) 
+
+    def cluster(self, threshold):
+        for i in self.shape[0]:
+            for j in self.shape[1]:
+                center_index = (i, j)
+                # If this cluster already exists,
+                # its center_index will already be in a cluster.
+                # Thus, we only need to check  the center index.
+                if self.cluster_map[center_index] == -1:
+                    # This cluster doesn't already exist
+                    self.add_cluster(*self.cluster_weight(center_index, threshold))
 
     def __getitem__(self, indeces):
         return self._weights.__getitem__(indeces)

@@ -115,12 +115,12 @@ def plot_content(in_path, content_string, out_path=None, title='', box_size=6, m
 # plot_content(db_path, 'Other_Content as Content', out_path='Content_Plots\\Other_UK.png', title='Other Content (United Kingdom)', llcrnrlat=49.5, llcrnrlon=-12, urcrnrlat=59, urcrnrlon=4, box_size=0.5)
 
 ################### SOM ANALYSIS ############################
-def build_SOM(db_path, query, N, path = None, random_seed=21893698):
+def build_SOM(db_path, query, N, path = None, random_seed=21893698, dimensions = None):
 	# Create a som
 	with get_data.EDataDB(db_path) as db:
 		db.open()
 		db.c.execute(query)
-		somap = som.ClassifiedSOM(db.c.fetchall(), random_seed=random_seed)
+		somap = som.ClassifiedSOM(db.c.fetchall(), random_seed=random_seed, dimensions = dimensions)
 
 	# Train SOM
 	somap.train(N)
@@ -136,6 +136,7 @@ def build_SOM(db_path, query, N, path = None, random_seed=21893698):
 	return somap
 
 # # Testing non-pure ecstasy pills
+# num_iter  = 100000
 # somap = build_SOM(db_path, """
 # 		SELECT * FROM SOM_Data
 # 		WHERE
@@ -143,22 +144,24 @@ def build_SOM(db_path, query, N, path = None, random_seed=21893698):
 # 		AND
 # 			date(Date) BETWEEN date('2008-01-01') AND date('2019-01-01')
 # 		""",
-# 		N = 1000000,
-# 		path = 'pickles/som_2008-2018_nonpure_1000000.pickle')
+# 		N = num_iter,
+# 		path = 'pickles/som_2008-2018_nonpure_1000000.pickle',
+# 		dimensions = (100,100))
 
-# N_str = '1000000'
+# somap.plot_distance_map(path='SOM_Plots/ActivationResponse_2008-2018_nonpure_%d_%s.png' % (num_iter, str(somap.shape)))
+# somap.plot_activation_response('SOM_Plots/DistanceMap_2008-2018_nonpure_%d_%s.png' % (num_iter, str(somap.shape)))
 
-# with open('pickles/som_2008-2018_nonpure_%s.pickle' % (N_str, ), 'rb') as in_f:
-# 	somap = pickle.load(in_f)
+# with open('pickles/som_2008-2018_nonpure_%d_%s.pickle' % (num_iter, str(somap.shape)), 'wb') as out_f:
+# 	pickle.dump(somap, out_f)
 
-# somap.plot_distance_map(path='SOM_Plots/ActivationResponse_2008-2018_nonpure_%s.png' % (N_str, ))
-# somap.plot_activation_response('SOM_Plots/DistanceMap_2008-2018_nonpure_%s.png' % (N_str, ))
-
-with open('pickles/som_2008-2018_nonpure_100000.pickle', 'rb') as in_f:
+with open('pickles/som_2008-2018_nonpure_100000_(30, 30).pickle', 'rb') as in_f:
 	somap = pickle.load(in_f)
 
-somap.generate_distance_map()
-# somap.generate_activation_response()
+with open('pickles/som_2008-2018_nonpure_100000_(30, 30).pickle', 'wb') as in_f:
+	pickle.dump(somap, out_f)
 
-clusters = [[(0,0),(0,1)]
-cluster_values = []
+somap.add_cluster(*somap.cluster_weight((17,29), 0.1))
+somap.plot_clusters()
+
+
+
