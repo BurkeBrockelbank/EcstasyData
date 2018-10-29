@@ -68,3 +68,5 @@ OTHER NOTES:
 Analysis idea. After the SOM is formed, each node can be tested to find the total distance from all data points. These sums can be normalized and plotted on a u-matrix, which will be able to show us classifications. I.e. if a certain bunch of nodes have high sums with a border of low sums, then we know that these nodes make up a class.
 
 After I have analyzed the data with the SOM I can convert the percentages back into parts if Earth is really adamant on formatting it in that way even though going back will not be as exact.
+
+I have found an error in the SOM dealing with normalization (I believe). The values in the input data are too large because (X^2 + Y^2 + Z^2 = 1) and the sum of squares of all the substance data is in [0,1], so it has values ranging from 1 to 2. I try doing the normalization method where every variable is rescaled to have mean 0 and standard deviation 1.

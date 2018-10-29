@@ -135,43 +135,43 @@ def build_SOM(db_path, query, N, path = None, random_seed=21893698, dimensions =
 			pickle.dump(somap, out_f)
 	return somap
 
-# # Testing non-pure ecstasy pills
-# num_iter  = 100000
-# somap = build_SOM(db_path, """
-# 		SELECT * FROM SOM_Data
-# 		WHERE
-# 			MDMA_Content < 1
-# 		AND
-# 			date(Date) BETWEEN date('2008-01-01') AND date('2019-01-01')
-# 		""",
-# 		N = num_iter,
-# 		path = 'pickles/som_2008-2018_nonpure_1000000.pickle',
-# 		dimensions = (100,100))
+# Testing non-pure ecstasy pills
+num_iter  = 100000
+somap = build_SOM(db_path, """
+		SELECT * FROM SOM_Data
+		WHERE
+			MDMA_Content < 1
+		AND
+			date(Date) BETWEEN date('2008-01-01') AND date('2019-01-01')
+		""",
+		N = num_iter,
+		path = 'pickles/som_2008-2018_nonpure_1000000.pickle',
+		dimensions = (50,50))
 
-# somap.plot_distance_map(path='SOM_Plots/ActivationResponse_2008-2018_nonpure_%d_%s.png' % (num_iter, str(somap.shape)))
-# somap.plot_activation_response('SOM_Plots/DistanceMap_2008-2018_nonpure_%d_%s.png' % (num_iter, str(somap.shape)))
+somap.plot_distance_map(path='SOM_Plots/GaussianNormalized/ActivationResponse_2008-2018_nonpure_%d_%s.png' % (num_iter, str(somap.shape)))
+somap.plot_activation_response('SOM_Plots/GaussianNormalized/DistanceMap_2008-2018_nonpure_%d_%s.png' % (num_iter, str(somap.shape)))
 
-# with open('pickles/som_2008-2018_nonpure_%d_%s.pickle' % (num_iter, str(somap.shape)), 'wb') as out_f:
-# 	pickle.dump(somap, out_f)
+with open('pickles/GaussianNormalized/som_2008-2018_nonpure_%d_%s.pickle' % (num_iter, str(somap.shape)), 'wb') as out_f:
+	pickle.dump(somap, out_f)
 
-with open('pickles/som_2008-2018_nonpure_100000_(100, 100).pickle', 'rb') as in_f:
-	somap = pickle.load(in_f)
+# with open('pickles/som_2008-2018_nonpure_100000_(100, 100).pickle', 'rb') as in_f:
+# 	somap = pickle.load(in_f)
 
 # somap.clear_clusters()
 
 # with open('pickles/som_2008-2018_nonpure_100000_(1, 1).pickle', 'wb') as out_f:
 # 	pickle.dump(somap, out_f)
 # exit()
-print(len(somap.data))
+# print(len(somap.data))
 
-somap.cluster(0.08)
+# somap.cluster(0.08)
 
-somap.plot_clusters(normalization = 'size', path = 'SOM_Plots/ClustersNormalized_2008-2018_nonpure_100000_(100, 100).png')
-somap.plot_clusters(path = 'SOM_Plots/Clusters_2008-2018_nonpure_100000_(100, 100).png')
-somap.cluster_report('cluster_report.txt')
+# somap.plot_clusters(normalization = 'size', path = 'SOM_Plots/ClustersNormalized_2008-2018_nonpure_100000_(100, 100).png')
+# somap.plot_clusters(path = 'SOM_Plots/Clusters_2008-2018_nonpure_100000_(100, 100).png')
+# somap.cluster_report('cluster_report.txt')
 
-somap.plot_distance_map(path = 'SOM_Plots/ActivationResponse_2008-2018_nonpure_100000_(100, 100).png')
-somap.plot_activation_response(path = 'SOM_Plots/DistanceMap_2008-2018_nonpure_100000_(100, 100).png')
+# somap.plot_distance_map(path = 'SOM_Plots/ActivationResponse_2008-2018_nonpure_100000_(100, 100).png')
+# somap.plot_activation_response(path = 'SOM_Plots/DistanceMap_2008-2018_nonpure_100000_(100, 100).png')
 
 
 

@@ -79,19 +79,41 @@ class ClassifiedSOM(minisom.MiniSom):
         if ignore_date:
             self.data = [x[1:] for x in self.data_raw]
         else:
-            # Need to normalize all the dates. First change everything to ordinals
+            # Need to convert all dates to ordinals
             self.data = map(lambda x: [x[0].toordinal()] + x[1:], self.data)
-            all_dates = [x[0] for x in self.data]
-            start_date = min(all_dates)
-            end_date = max(all_dates)
-            def __normalize_date(date_ordinal):
-                return (date_ordinal - start_date)/(end_date-start_date)
-            self.data = map(lambda x : [__normalize_date(x[0])] + x[1:], self.data)
+            # all_dates = [x[0] for x in self.data]
+            # start_date = min(all_dates)
+            # end_date = max(all_dates)
+            # def __normalize_date(date_ordinal):
+            #     return (date_ordinal - start_date)/(end_date-start_date)
+            # self.data = map(lambda x : [__normalize_date(x[0])] + x[1:], self.data)
         self.data = np.array(self.data)
+
+        self.normalize, self.denormalize = self.__normalizer()
 
         self.dist_map = None
         self.act_resp = None
         self.clear_clusters()
+
+    def __normalizer(self):
+        """
+        Creates a normalizer/denormalizer for the data. Normalized data is fed into the SOM.
+        """
+        # Find the standard deviation along every feature
+        self.data_std = np.std(self.data, axis = 0)
+        # Find the mean along every feature
+        self.data_mean = np.average(self.data, axis = 0)
+        self.data_n = (self.data - self.data_mean)/self.data_std
+        def normalize(vector):
+            weight = (vector - self.data_mean) / self.data_std
+            return weight
+
+        def denormalize(weight):
+            vector = weight * self.data_std + self.data_mean
+            return vector
+
+        return normalize, denormalize
+
 
     def train(self, num_iteration):
         """
@@ -103,13 +125,13 @@ class ClassifiedSOM(minisom.MiniSom):
         """
         """Trains the SOM picking samples at random from data"""
         self._check_iteration_number(num_iteration)
-        self._check_input_len(self.data)
+        self._check_input_len(self.data_n)
 
         bar = progressbar.ProgressBar(max_value = num_iteration, redirect_stdout=True).start()
         for iteration in range(num_iteration):
             # pick a random sample
-            rand_i = self._random_generator.randint(len(self.data))
-            self.update(self.data[rand_i], self.winner(self.data[rand_i]),
+            rand_i = self._random_generator.randint(len(self.data_n))
+            self.update(self.data_n[rand_i], self.winner(self.data_n[rand_i]),
                         iteration, num_iteration)
             bar.update(iteration)
         bar.finish()
@@ -118,7 +140,7 @@ class ClassifiedSOM(minisom.MiniSom):
         self.dist_map = self.distance_map()
 
     def generate_activation_response(self):
-        self.act_resp = self.activation_response(self.data)
+        self.act_resp = self.activation_response(self.data_n)
 
     def plot_distance_map(self, path=None):
         if self.dist_map is None:
@@ -404,10 +426,13 @@ class ClassifiedSOM(minisom.MiniSom):
 
         with open(path, 'w') as out_f:
             for activations, size, normalized_activations, center, weight, std in self.cluster_analysis():
+                # We want to output vectors, not weights
+                vector = self.denormalize(weight)
+                std = std * self.data_std
                 out_f.write('%10d    %10d    %8.2f    ' % (activations, size, normalized_activations))
                 out_f.write('%3d %3d' % center)
                 out_f.write('    ')
-                for x in zip_error(weight, std):
+                for x in zip_error(vector, std):
                     out_f.write(x)
                     out_f.write(' ')
                 out_f.write('\n')
