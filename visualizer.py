@@ -33,19 +33,29 @@ def lat_lng_to_x_y_z(latitude, longitude, radians = False):
 	z = np.sin(lat)
 	return (x,y,z)
 
-def x_y_z_to_lat_lng(x, y, z, radians = False):
+def x_y_z_to_lat_lng(x, y, z, radians = False, error = (0,0,0), sigma = 3):
 	"""
-	Convertes x, y, and z values into a latitude longitude tuple.
+	Converts x, y, and z values into a latitude longitude tuple.
 
 	Args:
 		x:
 		y:
 		z:
-		radians = False: True if latitude and longitude are given in radians
+		radians = False: True if latitude and longitude are desired in radians
+		error : float, 3-tuple, default (0,0,0)
+		sigma : float, default 1
+			Number of times to multiply the error.
 
 	Returns:
-		0: (latitude, longitude)
+		0: (latitude, longitude), (latitude uncerainty, longitude uncertainty)
 	"""
+	dlat = 0
+	dlng = 0
+	if error != (0,0,0):
+		dx,dy,dz = error
+		dlat = dz / np.sqrt(1-z**2)
+		dlng = (y/x)/(1+(y/x)**2) * np.sqrt((dx/x)**2 + (dy/y)**2)
+
 	lat = np.arcsin(z)
 	lng = np.arctan(y/x)
 
@@ -53,7 +63,7 @@ def x_y_z_to_lat_lng(x, y, z, radians = False):
 	if not radians:
 		lat = lat*180/np.pi
 		lng = lng*180/np.pi
-	return (lat, lng)
+	return (lat, lng), (dlat, dlng)
 
 def plot_latlng(lat_lon_v_list, box_size = 6, cmap_name = 'Purples', title = '', path=None, \
 	z_min=0, z_max=1, llcrnrlat=-58, llcrnrlon=-180, urcrnrlat=75, urcrnrlon=180, mode='average',
