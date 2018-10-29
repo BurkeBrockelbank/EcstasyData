@@ -91,8 +91,7 @@ class ClassifiedSOM(minisom.MiniSom):
 
         self.dist_map = None
         self.act_resp = None
-        self.cluster_map = -np.ones(self.shape, dtype = int)
-        self.cluster_weights = np.zeros(self.shape + (1,)*self.features)
+        self.clear_clusters()
 
     def train(self, num_iteration):
         """
@@ -127,7 +126,7 @@ class ClassifiedSOM(minisom.MiniSom):
 
         fig = plt.figure()
         ax = fig.add_subplot(111)
-        cax = ax.matshow(self.dist_map, interpolation='nearest')
+        cax = ax.matshow(self.dist_map, interpolation='spline16')
         fig.colorbar(cax)
         plt.title('Distance Map')
 
@@ -143,7 +142,7 @@ class ClassifiedSOM(minisom.MiniSom):
         fig = plt.figure()
         ax = fig.add_subplot(111)
         plot_max = 10**np.ceil(np.log10(self.act_resp.max()))
-        cax = ax.matshow(self.act_resp, interpolation='nearest', norm=LogNorm(vmin=1, vmax=plot_max))
+        cax = ax.matshow(self.act_resp, interpolation='spline16', norm=LogNorm(vmin=1, vmax=plot_max))
         fig.colorbar(cax)
         plt.title('Activation Response')
         
@@ -152,12 +151,39 @@ class ClassifiedSOM(minisom.MiniSom):
         else:
             plt.show()
 
-    def plot_clusters(self, path=None):
+    def clear_clusters(self):
+        self.cluster_map = -np.ones(self.shape, dtype = int)
+        self.cluster_map_normalized = -np.ones(self.shape)
+        self.cluster_weights = np.zeros(self.shape + (self.features,))
+        self.cluster_std = np.zeros(self.shape + (self.features,))
+        self.clusters = []
+
+    def plot_clusters(self, path=None, normalization = 'unnormalized'):
+        """
+            Plots the cluster map.
+
+            Args:
+                path : string, default None
+                    Save path. If None, just displays the plot.
+                normalization : string, default 'unnormalized'
+                    Normalization to apply to the cluster map. If 'unnormalized', just
+                    plots the activation total of the cluster. If 'size', normalizes
+                    to the size of the cluster.
+        """
         fig = plt.figure()
         ax = fig.add_subplot(111)
-        cax = ax.matshow(self.cluster_map, interpolation='nearest', vmin = 0)
-        fig.colorbar(cax)
-        plt.title('Distance Map')
+        if normalization == 'unnormalized':
+            to_plot = np.ma.masked_where(self.cluster_map < 0, self.cluster_map)
+        elif normalization == 'size':
+            to_plot = np.ma.masked_where(self.cluster_map < 0, self.cluster_map_normalized)
+
+        cax = ax.matshow(to_plot, interpolation='nearest', vmin = 0)
+        cb = fig.colorbar(cax)
+        if normalization == 'unnormalized':
+            cb.set_label('Cluster Activation', rotation = 270, labelpad = 15)
+        if normalization == 'size':
+            cb.set_label('Normalized Activation', rotation = 270, labelpad = 15)
+        plt.title('Cluster Map')
 
         if path != None:
             plt.savefig(path)
@@ -208,10 +234,12 @@ class ClassifiedSOM(minisom.MiniSom):
 
         Returns:
             0 : float, numpy array
-                The average weight of the cluster
-            1 : integer
-                The number of data points in the cluster
-            2 : integer list of 2-tuples
+                The average weight of the cluster.
+            1 : float, numpy array
+                The standard deviation of the average weight calculation.
+            2 : integer
+                The number of data points in the cluster.
+            3 : integer list of 2-tuples
                 All the indeces included in the cluster.
         """
         if cluster_indeces is None:
@@ -220,15 +248,29 @@ class ClassifiedSOM(minisom.MiniSom):
         if self.act_resp is None:
             self.generate_activation_response()
 
-        total_activation = 0
-        unit_sum = 0
+
+        ravelled_indeces = np.ravel_multi_index(np.array(cluster_indeces).transpose(), self.shape)
+
+        activations = self.act_resp.take(ravelled_indeces)
+        total_activation = np.sum(activations)
+
+        cluster_weights = []
         for index in cluster_indeces:
-            total_activation += self.act_resp[index]
-            unit_sum += self.act_resp[index] * self[index]
+            cluster_weights.append(self[index])
+        cluster_weights = np.array(cluster_weights)
+        average_weight = np.average(cluster_weights, axis = 0, weights = activations)
+        weight_std = np.sqrt(np.average((cluster_weights - average_weight)**2, axis = 0, weights = activations))
 
-        average_weight = unit_sum/total_activation
+        # unit_sum = 0
+        # for index in cluster_indeces:
+        #     unit_sum += self.act_resp[index] * self[index]
 
-        return average_weight, total_activation, list(cluster_indeces)
+        # try:
+        #     average_weight = unit_sum/total_activation
+        # except ZeroDivisionError:
+        #     # There is no activation of this cluster
+        #     raise exceptions.ClusterError('Inactive cluster at ' + str(center_index))
+        return average_weight, weight_std, total_activation, list(cluster_indeces)
 
     def __neighbors(self, index):
         i = index[0]
@@ -245,7 +287,7 @@ class ClassifiedSOM(minisom.MiniSom):
                         neighbors.append(neighbor)
         return neighbors
 
-    def add_cluster(self, average_weight, total_activation, cluster_indeces):
+    def add_cluster(self, average_weight, weight_std, total_activation, cluster_indeces):
         """
         Puts a cluster into the cluster map.
 
@@ -257,13 +299,18 @@ class ClassifiedSOM(minisom.MiniSom):
             cluster_indeces : integer list of 2-tuples
                 All the indeces included in the cluster.
         """
+        normal_activation = total_activation / len(cluster_indeces)
         for index in cluster_indeces:
             # Overlapping clusters!
             if self.cluster_map[index] != -1:
                 raise exceptions.ClusterError('Clusters overlapping at ' + str(index) + str(self.cluster_map[index]))
             else:
                 self.cluster_map[index] = total_activation
-                self.cluster_weights[index] = average_weight
+                self.cluster_map_normalized[index] = normal_activation
+                self.cluster_weights[index] = average_weight.transpose()
+                self.cluster_std[index] = weight_std.transpose()
+
+        self.clusters.append(cluster_indeces)
 
     def remove_cluster(self, center_index, threshold, cluster_indeces = None):
         """
@@ -278,18 +325,100 @@ class ClassifiedSOM(minisom.MiniSom):
 
         for index in cluster_indeces:
             self.cluster_map[index] = -1
-            self.cluster_weights_index[index].fill(0) 
+            self.cluster_map_normalized[index] = -1
+            self.cluster_weights[index].fill(0) 
+            self.cluster_std[index].fill(0) 
 
     def cluster(self, threshold):
-        for i in self.shape[0]:
-            for j in self.shape[1]:
+        for i in range(self.shape[0]):
+            for j in range(self.shape[1]):
                 center_index = (i, j)
                 # If this cluster already exists,
                 # its center_index will already be in a cluster.
                 # Thus, we only need to check  the center index.
                 if self.cluster_map[center_index] == -1:
-                    # This cluster doesn't already exist
-                    self.add_cluster(*self.cluster_weight(center_index, threshold))
+                    # This cluster doesn't already exist. Get the indeces
+                    cluster_indeces = self.cluster_indeces(center_index, threshold)
+                    if len(cluster_indeces) != 0:
+                        self.add_cluster(*self.cluster_weight(center_index, threshold, cluster_indeces=cluster_indeces))
+
+    def cluster_analysis(self):
+        """
+        Finds the center of every cluster, gives the number of members, the average weight, and the weight standard deviation.
+
+        Returns:
+            0 : list
+                Each element takes the form (cluster_center, average_weight, std)
+                where cluster center is an integer 2-tuple, average weight is a numpy
+                1d array, and std is a numpy 1d array.
+        """
+        analysis = []
+        for cluster_indeces in self.clusters:
+            cluster_center = self.find_center(cluster_indeces)
+            cluster_size = len(cluster_indeces)
+            activations = self.cluster_map[cluster_center]
+            normalized_activations = float(activations)/cluster_size
+            average_weight = self.cluster_weights[cluster_center]
+            std = self.cluster_std[cluster_center]
+            analysis.append((activations, cluster_size, normalized_activations, cluster_center, average_weight, std))
+
+        return sorted(analysis, reverse=True)
+
+    def dump_cluster_analysis(self, path):
+        """
+        Generates and writes out a cluster analysis.
+
+        Args:
+            0 : string
+                Path to output file.
+        """
+        r
+        with open(path, 'w') as out_f:
+            for activations, size, normalized_activations, center, weight, std in self.cluster_analysis():
+                out_f.write(str(activations))
+                out_f.write('    ')
+                out_f.write(str(size))
+                out_f.write('    ')
+                out_f.write(str(normalized_activations))
+                out_f.write('    ')
+                out_f.write(str(center))
+                out_f.write('    ')
+                out_f.write(repr(weight).replace('\n', ' '))
+                out_f.write('    ')
+                out_f.write(repr(std).replace('\n', ' '))
+                out_f.write('\n')
+
+    def cluster_report(self, path):
+        """
+        Generates and writes out a cluster analysis in a human readable form.
+
+        Args:
+            0 : string
+                Path to output file.
+        """
+        def zip_error(values, uncertainties):
+            for v, u in zip(values, uncertainties):
+                v = v.round(2)
+                u = u.round(2)
+                yield '%5.2f(%4.2f)' % (v, u)
+
+        with open(path, 'w') as out_f:
+            for activations, size, normalized_activations, center, weight, std in self.cluster_analysis():
+                out_f.write('%10d    %10d    %8.2f    ' % (activations, size, normalized_activations))
+                out_f.write('%3d %3d' % center)
+                out_f.write('    ')
+                for x in zip_error(weight, std):
+                    out_f.write(x)
+                    out_f.write(' ')
+                out_f.write('\n')
+
+
+    def find_center(self, cluster_indeces):
+        index_array = np.array(cluster_indeces)
+        mean_index = np.average(index_array, axis=0)
+        diff = np.sum(np.abs(index_array - mean_index), axis = 1)
+        closest_index = diff.argmin()
+        return cluster_indeces[closest_index]
 
     def __getitem__(self, indeces):
         return self._weights.__getitem__(indeces)
