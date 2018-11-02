@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 
 import exceptions
+import visualizer as vis
 
 class ClassifiedSOM(minisom.MiniSom):
     """
@@ -55,9 +56,18 @@ class ClassifiedSOM(minisom.MiniSom):
     """
     def __init__(self, data_list, dimensions=None, sigma=1.0, learning_rate=0.5,
         decay_function = minisom.asymptotic_decay,
-        neighborhood_function='gaussian', random_seed=None, ignore_date = True):
+        neighborhood_function='gaussian', random_seed=None, ignore_date = True, distance_weight=1,
+        normalization_mode = 'None', ID = False):
 
-        self.data_raw = data_list
+        self.distance_weight = distance_weight
+
+        self.ID = ID
+        if self.ID:
+            self.data_raw = [x[1:] for x in data_list]
+            self.IDs = [x[0] for x in data_list]
+        else:
+            self.data_raw = data_list
+
         if dimensions == None:
             samples = len(self.data_raw)
             neurons = 5*np.sqrt(samples)
@@ -69,7 +79,9 @@ class ClassifiedSOM(minisom.MiniSom):
 
         self.shape = (x,y)
 
-        self.features = 12 - ignore_date
+        self.ignore_date = ignore_date
+
+        self.features = len(self.data_raw[0]) - ignore_date
 
         super(ClassifiedSOM, self).__init__(x, y, self.features, sigma=sigma,
             learning_rate=learning_rate, decay_function = decay_function,
@@ -89,31 +101,70 @@ class ClassifiedSOM(minisom.MiniSom):
             # self.data = map(lambda x : [__normalize_date(x[0])] + x[1:], self.data)
         self.data = np.array(self.data)
 
-        self.normalize, self.denormalize = self.__normalizer()
+        if normalization_mode == 'None':
+            self.data_rescale = np.ones(self.data[0].shape)
+            self.data_mean = np.zeros(self.data[0].shape)
+        if normalization_mode == 'Gaussian':
+            # Create Gaussian normalized data.
+            self.data_rescale = np.std(self.data, axis = 0)
+            # Find the mean along every feature
+            self.data_mean = np.average(self.data, axis = 0)
+        if normalization_mode == 'Linear':
+            # Create Gaussian normalized data.
+            self.data_rescale = np.amax(self.data, axis = 0) - np.amin(self.data, axis = 0)
+            # Find the mean along every feature
+            self.data_mean = np.average(self.data, axis = 0)
+        if normalization_mode == 'LinearAbs':
+            # Create Gaussian normalized data.
+            self.data_rescale = np.amax(self.data, axis = 0) - np.amin(self.data, axis = 0)
+            # Find the mean along every feature
+            self.data_mean = np.amin(self.data, axis = 0)
+
+        self.data_n = self.normalize(self.data)
 
         self.dist_map = None
         self.act_resp = None
         self.clear_clusters()
 
-    def __normalizer(self):
+    def normalize(self, vector, uncertainty = False):
         """
-        Creates a normalizer/denormalizer for the data. Normalized data is fed into the SOM.
+        Normalizes data for the SOM.
+
+        Args:
+            vector : numpy float64 ndarray
+                Data from the table.
+            uncertainty : boolean, default False
+                If true, treats the vector as an uncertainty (does not subtract mean).
+
+        Returns:
+            0 : numpy float64 ndarray
+            Data from the SOM.
         """
-        # Find the standard deviation along every feature
-        self.data_std = np.std(self.data, axis = 0)
-        # Find the mean along every feature
-        self.data_mean = np.average(self.data, axis = 0)
-        self.data_n = (self.data - self.data_mean)/self.data_std
-        def normalize(vector):
-            weight = (vector - self.data_mean) / self.data_std
-            return weight
+        if uncertainty:
+            weight = vector/self.data_rescale
+        else:
+            weight = (vector - self.data_mean) / self.data_rescale
+        return weight
 
-        def denormalize(weight):
-            vector = weight * self.data_std + self.data_mean
-            return vector
+    def denormalize(self, weight, uncertainty = False):
+        """
+        Deormalizes data for the SOM.
 
-        return normalize, denormalize
+        Args:
+            weight : numpy float64 ndarray
+                Data from the SOM.
+            uncertainty : boolean, default False
+                If true, treats the vector as an uncertainty (does not subtract mean).
 
+        Returns:
+            0 : numpy float64 ndarray
+                Data from the table.
+        """
+        if uncertainty:
+            vector = weight * self.data_rescale
+        else:
+            vector = weight * self.data_rescale + self.data_mean
+        return vector
 
     def train(self, num_iteration):
         """
@@ -149,11 +200,12 @@ class ClassifiedSOM(minisom.MiniSom):
         fig = plt.figure()
         ax = fig.add_subplot(111)
         cax = ax.matshow(self.dist_map, interpolation='spline16')
-        fig.colorbar(cax)
-        plt.title('Distance Map')
+        fig.colorbar(cax, orientation='horizontal')
+        plt.title('Distance Map', y=1.1)
 
         if path != None:
             plt.savefig(path)
+            plt.close()
         else:
             plt.show()
 
@@ -165,11 +217,12 @@ class ClassifiedSOM(minisom.MiniSom):
         ax = fig.add_subplot(111)
         plot_max = 10**np.ceil(np.log10(self.act_resp.max()))
         cax = ax.matshow(self.act_resp, interpolation='spline16', norm=LogNorm(vmin=1, vmax=plot_max))
-        fig.colorbar(cax)
-        plt.title('Activation Response')
+        fig.colorbar(cax, orientation='horizontal')
+        plt.title('Activation Response', y=1.1)
         
         if path != None:
             plt.savefig(path)
+            plt.close()
         else:
             plt.show()
 
@@ -200,15 +253,16 @@ class ClassifiedSOM(minisom.MiniSom):
             to_plot = np.ma.masked_where(self.cluster_map < 0, self.cluster_map_normalized)
 
         cax = ax.matshow(to_plot, interpolation='nearest', vmin = 0)
-        cb = fig.colorbar(cax)
+        cb = fig.colorbar(cax, orientation='horizontal')
         if normalization == 'unnormalized':
-            cb.set_label('Cluster Activation', rotation = 270, labelpad = 15)
+            cb.set_label('Cluster Activation', labelpad = 15)
         if normalization == 'size':
-            cb.set_label('Normalized Activation', rotation = 270, labelpad = 15)
-        plt.title('Cluster Map')
+            cb.set_label('Normalized Activation', labelpad = 15)
+        plt.title('Cluster Map', y=1.1)
 
-        if path != None:
+        if path is not None:
             plt.savefig(path)
+            plt.close()
         else:
             plt.show()
 
@@ -280,7 +334,11 @@ class ClassifiedSOM(minisom.MiniSom):
         for index in cluster_indeces:
             cluster_weights.append(self[index])
         cluster_weights = np.array(cluster_weights)
-        average_weight = np.average(cluster_weights, axis = 0, weights = activations)
+        try:
+            average_weight = np.average(cluster_weights, axis = 0, weights = activations)
+        except ZeroDivisionError:
+            # There is no activation of this cluster
+            raise exceptions.ClusterError('Inactive cluster at ' + str(center_index))
         weight_std = np.sqrt(np.average((cluster_weights - average_weight)**2, axis = 0, weights = activations))
 
         # unit_sum = 0
@@ -362,7 +420,13 @@ class ClassifiedSOM(minisom.MiniSom):
                     # This cluster doesn't already exist. Get the indeces
                     cluster_indeces = self.cluster_indeces(center_index, threshold)
                     if len(cluster_indeces) != 0:
-                        self.add_cluster(*self.cluster_weight(center_index, threshold, cluster_indeces=cluster_indeces))
+                        try:
+                            average_weight, weight_std, total_activation, cluster_indeces_list = \
+                            self.cluster_weight(center_index, threshold, cluster_indeces=cluster_indeces)
+                            self.add_cluster(average_weight, weight_std, total_activation, cluster_indeces_list)
+                        except exceptions.ClusterError:
+                            # We ran into an inactive cluster.
+                            pass
 
     def cluster_analysis(self):
         """
@@ -384,7 +448,11 @@ class ClassifiedSOM(minisom.MiniSom):
             std = self.cluster_std[cluster_center]
             analysis.append((activations, cluster_size, normalized_activations, cluster_center, average_weight, std))
 
-        return sorted(analysis, reverse=True)
+        # We want to sort the analysis as well as sort self.clusters
+        analysis_clusters = sorted(zip(analysis, self.clusters), reverse = True)
+        analysis, self.clusters = zip(*analysis_clusters)
+
+        return analysis
 
     def dump_cluster_analysis(self, path):
         """
@@ -394,7 +462,6 @@ class ClassifiedSOM(minisom.MiniSom):
             0 : string
                 Path to output file.
         """
-        r
         with open(path, 'w') as out_f:
             for activations, size, normalized_activations, center, weight, std in self.cluster_analysis():
                 out_f.write(str(activations))
@@ -422,21 +489,45 @@ class ClassifiedSOM(minisom.MiniSom):
             for v, u in zip(values, uncertainties):
                 v = v.round(2)
                 u = u.round(2)
-                yield '%5.2f(%4.2f)' % (v, u)
+                yield '%7.2f(%4.2f)' % (v, u)
+
+        # def zip_error_latlng(latlng, latlngerr):
+        #     for v, u in zip(latlng, latlngerr):
+        #         v = v.round(2)
+        #         u = u.round(2)
+        #         yield '%6.2f(%5.2f)' % (v, u)
 
         with open(path, 'w') as out_f:
+            out_f.write('#Activations    Cluster Size   Act/Size   i   j       MDMA          Enactogen     Psychedelic   Cannabinoid   Dissociative  Stimulant     Depressant    Other\n')
             for activations, size, normalized_activations, center, weight, std in self.cluster_analysis():
+            #     if self.ignore_date:
+            #         x = weight[0]
+            #         y = weight[1]
+            #         z = weight[2]
+            #         dx = std[0]
+            #         dy = std[1]
+            #         dz = std[2]
+            #     else:
+            #         x = weight[1]
+            #         y = weight[2]
+            #         z = weight[3]
+            #         dx = std[1]
+            #         dy = std[2]
+            #         dz = std[3]
+            #     latlng, latlngerr = vis.x_y_z_to_lat_lng(x, y, z, error = (dx,dy,dz))
                 # We want to output vectors, not weights
                 vector = self.denormalize(weight)
-                std = std * self.data_std
+                std = self.denormalize(std, uncertainty = True)
                 out_f.write('%10d    %10d    %8.2f    ' % (activations, size, normalized_activations))
                 out_f.write('%3d %3d' % center)
                 out_f.write('    ')
                 for x in zip_error(vector, std):
                     out_f.write(x)
                     out_f.write(' ')
+                # for coord in zip_error_latlng(latlng, latlngerr):
+                #     out_f.write(coord)
+                #     out_f.write(' ')
                 out_f.write('\n')
-
 
     def find_center(self, cluster_indeces):
         index_array = np.array(cluster_indeces)
@@ -444,6 +535,21 @@ class ClassifiedSOM(minisom.MiniSom):
         diff = np.sum(np.abs(index_array - mean_index), axis = 1)
         closest_index = diff.argmin()
         return cluster_indeces[closest_index]
+
+    def member_IDs(self, cluster_indeces):
+        """
+        Returns a list of all the data IDs which are a member of this cluster.
+        """
+        assert self.ID
+
+        members = []
+
+        for ID, weight in zip(self.IDs, self.data_n):
+            # Find out what the winner neuron is
+            winner_index = self.winner(weight)
+            if winner_index in cluster_indeces:
+                members.append(ID)
+        return members
 
     def __getitem__(self, indeces):
         return self._weights.__getitem__(indeces)

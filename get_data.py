@@ -270,28 +270,28 @@ class EDataDB:
 				GROUP BY Pill_Misc.Pill_ID;
 		""")
 
-		# SOM_Data
-		self.c.execute("""
-			CREATE VIEW IF NOT EXISTS SOM_Data AS
-				SELECT
-					Date,
-				    X,
-				    Y,
-				    Z,
-				    MDMA_Content,
-				    Enactogen_Content,
-				    Psychedelic_Content,
-				    Cannabinoid_Content,
-				    Dissociative_Content,
-				    Stimulant_Content,
-				    Depressant_Content,
-				    Other_Content
-				FROM
-				    SOM_Classification, Pill_Misc, Location
-				WHERE
-					Pill_Misc.Pill_ID = SOM_Classification.Pill_ID
-					AND Location.Location_ID = Pill_Misc.Location_ID;
-		""")
+		# # SOM_Data
+		# self.c.execute("""
+		# 	CREATE VIEW IF NOT EXISTS SOM_Data AS
+		# 		SELECT
+		# 			Date,
+		# 		    X,
+		# 		    Y,
+		# 		    Z,
+		# 		    MDMA_Content,
+		# 		    Enactogen_Content,
+		# 		    Psychedelic_Content,
+		# 		    Cannabinoid_Content,
+		# 		    Dissociative_Content,
+		# 		    Stimulant_Content,
+		# 		    Depressant_Content,
+		# 		    Other_Content
+		# 		FROM
+		# 		    SOM_Classification, Pill_Misc, Location
+		# 		WHERE
+		# 			Pill_Misc.Pill_ID = SOM_Classification.Pill_ID
+		# 			AND Location.Location_ID = Pill_Misc.Location_ID;
+		# """)
 		
 		# Content_Map
 		self.c.execute("""

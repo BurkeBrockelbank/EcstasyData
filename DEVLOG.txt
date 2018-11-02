@@ -70,3 +70,5 @@ Analysis idea. After the SOM is formed, each node can be tested to find the tota
 After I have analyzed the data with the SOM I can convert the percentages back into parts if Earth is really adamant on formatting it in that way even though going back will not be as exact.
 
 I have found an error in the SOM dealing with normalization (I believe). The values in the input data are too large because (X^2 + Y^2 + Z^2 = 1) and the sum of squares of all the substance data is in [0,1], so it has values ranging from 1 to 2. I try doing the normalization method where every variable is rescaled to have mean 0 and standard deviation 1.
+
+I have found that rescaling everything linearly in the range [0,1] works the best. What I have also found is the only mixture I am seeing in any appreciable quantity is the mixture of MDMA and a stimulant. I am not really seeing any regional trends. It seems to be consistent regardless of location.

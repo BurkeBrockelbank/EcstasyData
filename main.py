@@ -62,6 +62,55 @@ def plot_content(in_path, content_string, out_path=None, title='', box_size=6, m
 
 	conn.close()
 
+def plot_by_ID(in_path, IDs, out_path=None, title='', box_size=6, mode='average', \
+	llcrnrlat=-58, llcrnrlon=-180, urcrnrlat=75, urcrnrlon=180, logplot=False, \
+	z_min=0, z_max=1, cmap_name = 'Purples', default_range=False, cb_label='(as a portion of active substances)'):
+	"""
+	Plots the content_string on a map.
+
+	Args:
+		in_path: Path to the database.
+		out_path: Path to the image
+		content_string: SQL string for the value column of the plot from Content_Map. E.g. '(MDMA_Content + Enactogen_Content) as Content'
+	"""
+
+	conn = sqlite3.connect(in_path)
+	c = conn.cursor()
+	# Plot the ecstasy map first
+	c.execute("DROP TABLE IF EXISTS Cluster_Placeholder;")
+	c.execute("""
+			CREATE TABLE Cluster_Placeholder(
+				Pill_ID INTEGER
+			);
+		""")
+	for ID in IDs:
+		c.execute("""
+				INSERT INTO
+					Cluster_Placeholder
+				VALUES
+					(?);
+			""", (ID,))
+	c.execute("""
+			SELECT
+				Location.Latitude,
+				Location.Longitude,
+				1
+			FROM
+				Cluster_Placeholder, Location, Pill_Misc
+			WHERE
+				Cluster_Placeholder.Pill_ID = Pill_Misc.Pill_ID
+			AND
+				Pill_Misc.Location_ID = Location.Location_ID;
+		""")
+	content_data = c.fetchall()
+	c.execute("DROP TABLE Cluster_Placeholder;")
+	conn.commit()
+	conn.close()
+
+	vis.plot_latlng(content_data, box_size = box_size, title = title, path=out_path, mode=mode, \
+		llcrnrlat=llcrnrlat, llcrnrlon=llcrnrlon, urcrnrlat=urcrnrlat, urcrnrlon=urcrnrlon, logplot=logplot, \
+		z_min=z_min, z_max=z_max, cmap_name = cmap_name, default_range=default_range, cb_label=cb_label)
+
 # # Plot world
 # plot_content(db_path, '(MDMA_Content+Enactogen_Content+Psychedelic_Content+Cannabinoid_Content+Dissociative_Content+Stimulant_Content+Depressant_Content+Other_Content) as Content', \
 # 	out_path='Content_Plots\\Samples.png', title='Number of Samples Tested', mode='sum', z_min=1, z_max=600, cmap_name='Reds', cb_label='', logplot=True)
@@ -115,12 +164,20 @@ def plot_content(in_path, content_string, out_path=None, title='', box_size=6, m
 # plot_content(db_path, 'Other_Content as Content', out_path='Content_Plots\\Other_UK.png', title='Other Content (United Kingdom)', llcrnrlat=49.5, llcrnrlon=-12, urcrnrlat=59, urcrnrlon=4, box_size=0.5)
 
 ################### SOM ANALYSIS ############################
-def build_SOM(db_path, query, N, path = None, random_seed=21893698, dimensions = None):
+def build_SOM(db_path, query, N, path = None, random_seed=21893698, dimensions = None, \
+	normalization_mode = 'None', ID = False):
 	# Create a som
 	with get_data.EDataDB(db_path) as db:
 		db.open()
 		db.c.execute(query)
-		somap = som.ClassifiedSOM(db.c.fetchall(), random_seed=random_seed, dimensions = dimensions)
+		data = db.c.fetchall()
+		print('Analysing %d points...' % (len(data), ))
+		somap = som.ClassifiedSOM(data, random_seed=random_seed,
+			dimensions = dimensions, normalization_mode = normalization_mode,
+			ID = ID, sigma = 0.8)
+
+	# Initialize weight from data
+	somap.random_weights_init(somap.data)
 
 	# Train SOM
 	somap.train(N)
@@ -135,43 +192,220 @@ def build_SOM(db_path, query, N, path = None, random_seed=21893698, dimensions =
 			pickle.dump(somap, out_f)
 	return somap
 
-# Testing non-pure ecstasy pills
-num_iter  = 100000
-somap = build_SOM(db_path, """
-		SELECT * FROM SOM_Data
+# Queries for SOM data IN US, EU, and UK
+query_US = """
+		SELECT
+			Pill_Misc.Date,
+		    Location.Latitude,
+		    Location.Longitude,
+		    SOM_Classification.MDMA_Content,
+		    SOM_Classification.Enactogen_Content,
+		    SOM_Classification.Psychedelic_Content,
+		    SOM_Classification.Cannabinoid_Content,
+		    SOM_Classification.Dissociative_Content,
+		    SOM_Classification.Stimulant_Content,
+		    SOM_Classification.Depressant_Content,
+		    SOM_Classification.Other_Content
+		FROM
+			Pill_Misc, Location, SOM_Classification
 		WHERE
-			MDMA_Content < 1
+			Pill_Misc.Pill_ID = SOM_Classification.Pill_ID
 		AND
-			date(Date) BETWEEN date('2008-01-01') AND date('2019-01-01')
-		""",
+			Pill_Misc.Location_ID = Location.Location_ID
+		AND
+			date(Pill_Misc.Date) BETWEEN date('2008-01-01') AND date('2019-01-01')
+		AND 
+			Location.Latitude BETWEEN 15 AND 60
+		AND
+			Location.Longitude BETWEEN -135 AND -60;
+		"""
+
+query_no_coords_NA = """
+		SELECT
+			Pill_Misc.Pill_ID,
+			Pill_Misc.Date,
+		    SOM_Classification.MDMA_Content,
+		    SOM_Classification.Enactogen_Content,
+		    SOM_Classification.Psychedelic_Content,
+		    SOM_Classification.Cannabinoid_Content,
+		    SOM_Classification.Dissociative_Content,
+		    SOM_Classification.Stimulant_Content,
+		    SOM_Classification.Depressant_Content,
+		    SOM_Classification.Other_Content
+		FROM
+			Pill_Misc, SOM_Classification, Location
+		WHERE
+			Pill_Misc.Pill_ID = SOM_Classification.Pill_ID
+		AND
+			Pill_Misc.Location_ID = Location.Location_ID
+		AND
+			date(Pill_Misc.Date) BETWEEN date('2008-01-01') AND date('2019-01-01')
+		AND 
+			Location.Latitude BETWEEN 15 AND 60
+		AND
+			Location.Longitude BETWEEN -135 AND -60
+		AND SOM_Classification.MDMA_Content < 1;
+	"""
+
+query_no_coords = """
+		SELECT
+			Pill_Misc.Pill_ID,
+			Pill_Misc.Date,
+		    SOM_Classification.MDMA_Content,
+		    SOM_Classification.Enactogen_Content,
+		    SOM_Classification.Psychedelic_Content,
+		    SOM_Classification.Cannabinoid_Content,
+		    SOM_Classification.Dissociative_Content,
+		    SOM_Classification.Stimulant_Content,
+		    SOM_Classification.Depressant_Content,
+		    SOM_Classification.Other_Content
+		FROM
+			Pill_Misc, SOM_Classification, Location
+		WHERE
+			Pill_Misc.Pill_ID = SOM_Classification.Pill_ID
+		AND
+			Pill_Misc.Location_ID = Location.Location_ID
+		AND
+			date(Pill_Misc.Date) BETWEEN date('2008-01-01') AND date('2019-01-01');
+	"""
+
+query_no_coords_EU = """
+		SELECT
+			Pill_Misc.Pill_ID,
+			Pill_Misc.Date,
+		    SOM_Classification.MDMA_Content,
+		    SOM_Classification.Enactogen_Content,
+		    SOM_Classification.Psychedelic_Content,
+		    SOM_Classification.Cannabinoid_Content,
+		    SOM_Classification.Dissociative_Content,
+		    SOM_Classification.Stimulant_Content,
+		    SOM_Classification.Depressant_Content,
+		    SOM_Classification.Other_Content
+		FROM
+			Pill_Misc, SOM_Classification, Location
+		WHERE
+			Pill_Misc.Pill_ID = SOM_Classification.Pill_ID
+		AND
+			Pill_Misc.Location_ID = Location.Location_ID
+		AND
+			date(Pill_Misc.Date) BETWEEN date('2008-01-01') AND date('2019-01-01')
+		AND 
+			Location.Latitude BETWEEN 35 AND 65
+		AND
+			Location.Longitude BETWEEN -15 AND 40
+		AND
+			SOM_Classification.MDMA_Content < 1;
+	"""
+
+query_EU = """
+		SELECT
+			Pill_Misc.Date,
+		    Location.Latitude,
+		    Location.Longitude,
+		    SOM_Classification.MDMA_Content,
+		    SOM_Classification.Enactogen_Content,
+		    SOM_Classification.Psychedelic_Content,
+		    SOM_Classification.Cannabinoid_Content,
+		    SOM_Classification.Dissociative_Content,
+		    SOM_Classification.Stimulant_Content,
+		    SOM_Classification.Depressant_Content,
+		    SOM_Classification.Other_Content
+		FROM
+			Pill_Misc, Location, SOM_Classification
+		WHERE
+			Pill_Misc.Pill_ID = SOM_Classification.Pill_ID
+		AND
+			Pill_Misc.Location_ID = Location.Location_ID
+		AND
+			date(Pill_Misc.Date) BETWEEN date('2008-01-01') AND date('2019-01-01')
+		AND 
+			Location.Latitude BETWEEN 35 AND 65
+		AND
+			Location.Longitude BETWEEN -15 AND 40;
+		"""
+
+query_UK = """
+		SELECT
+			Pill_Misc.Date,
+		    Location.Latitude,
+		    Location.Longitude,
+		    SOM_Classification.MDMA_Content,
+		    SOM_Classification.Enactogen_Content,
+		    SOM_Classification.Psychedelic_Content,
+		    SOM_Classification.Cannabinoid_Content,
+		    SOM_Classification.Dissociative_Content,
+		    SOM_Classification.Stimulant_Content,
+		    SOM_Classification.Depressant_Content,
+		    SOM_Classification.Other_Content
+		FROM
+			Pill_Misc, Location, SOM_Classification
+		WHERE
+			Pill_Misc.Pill_ID = SOM_Classification.Pill_ID
+		AND
+			Pill_Misc.Location_ID = Location.Location_ID
+		AND
+			date(Pill_Misc.Date) BETWEEN date('2008-01-01') AND date('2019-01-01')
+		AND 
+			Location.Latitude BETWEEN 49.5 AND 59
+		AND
+			Location.Longitude BETWEEN -12 AND 44;
+		"""
+
+########### Build and train SOM ################
+num_iter  = 100000
+shape = (15,15)
+normalization_mode = 'None'
+directory = 'NoCoordinates/%sNormalized/NA' % (normalization_mode,)
+
+somap = build_SOM(db_path, query_no_coords_NA,
 		N = num_iter,
-		path = 'pickles/som_2008-2018_nonpure_1000000.pickle',
-		dimensions = (50,50))
+		path = 'pickles/%s/SOM_2008-2018_%d_%s.pickle' % (directory, num_iter, str(shape)),
+		dimensions = shape,
+		normalization_mode = normalization_mode,
+		ID = True)
 
-somap.plot_distance_map(path='SOM_Plots/GaussianNormalized/ActivationResponse_2008-2018_nonpure_%d_%s.png' % (num_iter, str(somap.shape)))
-somap.plot_activation_response('SOM_Plots/GaussianNormalized/DistanceMap_2008-2018_nonpure_%d_%s.png' % (num_iter, str(somap.shape)))
+# with open('pickles/%s/SOM_2008-2018_%d_%s.pickle' % (directory, num_iter, str(somap.shape)), 'wb') as out_f:
+	# pickle.dump(somap, out_f)
 
-with open('pickles/GaussianNormalized/som_2008-2018_nonpure_%d_%s.pickle' % (num_iter, str(somap.shape)), 'wb') as out_f:
-	pickle.dump(somap, out_f)
+########### ALTER PICKLE ################
 
-# with open('pickles/som_2008-2018_nonpure_100000_(100, 100).pickle', 'rb') as in_f:
+# with open('pickles/GaussianNormalized/US/SOM_2008-2018_nonpure_%d_%s.pickle' % (num_iter, str(shape)), 'rb') as in_f:
 # 	somap = pickle.load(in_f)
 
-# somap.clear_clusters()
+# DO SOMETHING
 
-# with open('pickles/som_2008-2018_nonpure_100000_(1, 1).pickle', 'wb') as out_f:
+# with open('pickles/GaussianNormalized/SOM_2008-2018_nonpure_%d_%s.pickle' % (num_iter, str(shape)), 'wb') as out_f:
 # 	pickle.dump(somap, out_f)
 # exit()
-# print(len(somap.data))
 
-# somap.cluster(0.08)
+################ CLUSTERING ######################
+with open('pickles/%s/SOM_2008-2018_%d_%s.pickle' % (directory, num_iter, str(shape)), 'rb') as in_f:
+	somap = pickle.load(in_f)
 
-# somap.plot_clusters(normalization = 'size', path = 'SOM_Plots/ClustersNormalized_2008-2018_nonpure_100000_(100, 100).png')
-# somap.plot_clusters(path = 'SOM_Plots/Clusters_2008-2018_nonpure_100000_(100, 100).png')
-# somap.cluster_report('cluster_report.txt')
+print(len(somap.data))
 
-# somap.plot_distance_map(path = 'SOM_Plots/ActivationResponse_2008-2018_nonpure_100000_(100, 100).png')
-# somap.plot_activation_response(path = 'SOM_Plots/DistanceMap_2008-2018_nonpure_100000_(100, 100).png')
+somap.plot_activation_response(path='SOM_Plots/%s/ActivationResponse_2008-2018_%d_%s.png' % (directory, num_iter, str(somap.shape)))
+somap.plot_distance_map(path = 'SOM_Plots/%s/DistanceMap_2008-2018_%d_%s.png' % (directory, num_iter, str(somap.shape)))
+
+somap.cluster(0.08)
+somap.cluster_analysis()
+
+somap.plot_clusters()
+somap.plot_clusters(normalization = 'size', path = 'SOM_Plots/%s/ClustersNormalized_2008-2018_%d_%s.png' % (directory, num_iter, str(shape)))
+somap.plot_clusters(path = 'SOM_Plots/%s/Clusters_2008-2018_%d_%s.png' % (directory, num_iter, str(shape)))
+somap.cluster_report('SOM_Plots/%s/ClusterReport_2008-2018_%d_%s.txt' % (directory, num_iter, str(shape)))
+
+# Plotting on Map
+for i, IDs in enumerate(somap.member_IDs(x) for x in somap.clusters):
+	plot_by_ID(db_path, IDs,
+		out_path='SOM_Plots/%s/Cluster%d_2008-2018_%d_%s.png' % (directory, i, num_iter, str(shape)),
+		title='Cluster %d' % (i,), mode = 'sum', z_min = 1, z_max = None, logplot = False,
+		llcrnrlat=23, llcrnrlon=-135, urcrnrlat=53, urcrnrlon=-60, box_size=2)
+
+vis.plot_clusters(somap.cluster_analysis()[:8], somap.denormalize,
+	llcrnrlat=23, llcrnrlon=-135, urcrnrlat=52, urcrnrlon=-60,
+	title = 'Clusters for 2008-2018_nonpure_%d_%s.png' % (num_iter, str(shape)),
+	path = 'SOM_Plots/%s/ClusterReport_2008-2018_nonpure_%d_%s.png' % (directory, num_iter, str(shape)))
 
 
 
