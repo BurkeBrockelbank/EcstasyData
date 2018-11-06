@@ -402,10 +402,10 @@ for i, IDs in enumerate(somap.member_IDs(x) for x in somap.clusters):
 		title='Cluster %d' % (i,), mode = 'sum', z_min = 1, z_max = None, logplot = False,
 		llcrnrlat=23, llcrnrlon=-135, urcrnrlat=53, urcrnrlon=-60, box_size=2)
 
-vis.plot_clusters(somap.cluster_analysis()[:8], somap.denormalize,
-	llcrnrlat=23, llcrnrlon=-135, urcrnrlat=52, urcrnrlon=-60,
-	title = 'Clusters for 2008-2018_nonpure_%d_%s.png' % (num_iter, str(shape)),
-	path = 'SOM_Plots/%s/ClusterReport_2008-2018_nonpure_%d_%s.png' % (directory, num_iter, str(shape)))
+# vis.plot_clusters(somap.cluster_analysis()[:8], somap.denormalize,
+# 	llcrnrlat=23, llcrnrlon=-135, urcrnrlat=52, urcrnrlon=-60,
+# 	title = 'Clusters for 2008-2018_nonpure_%d_%s.png' % (num_iter, str(shape)),
+# 	path = 'SOM_Plots/%s/ClusterReport_2008-2018_nonpure_%d_%s.png' % (directory, num_iter, str(shape)))
 
 
 
