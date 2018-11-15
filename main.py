@@ -165,19 +165,25 @@ def plot_by_ID(in_path, IDs, out_path=None, title='', box_size=6, mode='average'
 
 ################### SOM ANALYSIS ############################
 def build_SOM(db_path, query, N, path = None, random_seed=21893698, dimensions = None, \
-	normalization_mode = 'None', ID = False):
+	normalization_mode = 'None', ID = False, initial_weights = None,
+	lr = 1, sigma = 0.5,
+    cyclic = None, cyclic_norms = None, cyclic_modes = None):
 	# Create a som
 	with get_data.EDataDB(db_path) as db:
 		db.open()
 		db.c.execute(query)
 		data = db.c.fetchall()
 		print('Analysing %d points...' % (len(data), ))
-		somap = som.ClassifiedSOM(data, random_seed=random_seed,
+		somap = som.SOM(data, random_seed=random_seed,
 			dimensions = dimensions, normalization_mode = normalization_mode,
-			ID = ID, sigma = 0.8)
+			ID = ID, learning_rate = lr, sigma = sigma,
+        	cyclic = cyclic, cyclic_norms = cyclic_norms, cyclic_modes = cyclic_modes)
 
-	# Initialize weight from data
-	somap.random_weights_init(somap.data)
+	# Initialize weights
+	if initial_weights is None:
+		somap.random_weights_init(somap.data)
+	if initial_weights is not None:
+		somap._weights = initial_weights
 
 	# Train SOM
 	somap.train(N)
@@ -186,11 +192,29 @@ def build_SOM(db_path, query, N, path = None, random_seed=21893698, dimensions =
 	somap.generate_distance_map()
 	somap.generate_activation_response()
 
+	# # Build winners and members
+	# somap.build_winners()
+	# somap.build_cluster_members()
+
 	# Save SOM
 	if path != None:
 		with open(path, 'wb') as out_f:
 			pickle.dump(somap, out_f)
 	return somap
+
+def expand_SOM(in_map, n, db_path, query, N, path = None, random_seed=21893698, \
+	normalization_mode = 'None', ID = False, lr = 1.0, sigma = 0.5,
+    cyclic = None, cyclic_norms = None, cyclic_modes = None):
+
+	# Get the initializtion weights
+	weights = in_map.expand(n)
+	dimensions = weights.shape[:2]
+
+	return build_SOM(db_path, query, N, random_seed=random_seed,
+			dimensions = dimensions, normalization_mode = normalization_mode,
+			ID = ID, path = path, initial_weights=weights,
+			lr = lr, sigma = sigma,
+        	cyclic = cyclic, cyclic_norms = cyclic_norms, cyclic_modes = cyclic_modes)
 
 # Queries for SOM data IN US, EU, and UK
 query_US = """
@@ -351,18 +375,57 @@ query_UK = """
 			Location.Longitude BETWEEN -12 AND 44;
 		"""
 
+query_World = """
+		SELECT
+			Pill_Misc.Pill_ID,
+		    Location.Latitude,
+		    Location.Longitude,
+		    SOM_Classification.MDMA_Content,
+		    SOM_Classification.Enactogen_Content,
+		    SOM_Classification.Psychedelic_Content,
+		    SOM_Classification.Cannabinoid_Content,
+		    SOM_Classification.Dissociative_Content,
+		    SOM_Classification.Stimulant_Content,
+		    SOM_Classification.Depressant_Content,
+		    SOM_Classification.Other_Content
+		FROM
+			Pill_Misc, Location, SOM_Classification
+		WHERE
+			Pill_Misc.Pill_ID = SOM_Classification.Pill_ID
+		AND
+			Pill_Misc.Location_ID = Location.Location_ID
+		AND
+			date(Pill_Misc.Date) BETWEEN date('2008-01-01') AND date('2019-01-01');
+		"""
+
+
 ########### Build and train SOM ################
 num_iter  = 100000
-shape = (15,15)
-normalization_mode = 'None'
-directory = 'NoCoordinates/%sNormalized/NA' % (normalization_mode,)
+shape = (15,20)
+normalization_mode = 'LinearAbs'
+directory = '%sNormalized' % (normalization_mode,)
 
-somap = build_SOM(db_path, query_no_coords_NA,
+# somap = build_SOM(db_path, query_World,
+# 		N = num_iter,
+# 		path = 'pickles/%s/SOM_2008-2018_%d_%s_pre.pickle' % (directory, num_iter, str(shape)),
+# 		dimensions = shape,
+# 		normalization_mode = normalization_mode,
+# 		ID = True,
+# 		cyclic = (False, True) + (False,)*8,
+# 		cyclic_norms = (1,)*10,
+# 		cyclic_modes = ('deg',)*10)
+
+with open('pickles/LinearAbsNormalized/SOM_2008-2018_100000_(15, 20)_pre.pickle', 'rb') as in_f:
+	somap = pickle.load(in_f)
+
+somap = expand_SOM(somap, 2, db_path, query_World,
 		N = num_iter,
-		path = 'pickles/%s/SOM_2008-2018_%d_%s.pickle' % (directory, num_iter, str(shape)),
-		dimensions = shape,
+		path = 'pickles/%s/SOM_2008-2018_%d_2%s.pickle' % (directory, num_iter, str(shape)),
 		normalization_mode = normalization_mode,
-		ID = True)
+		ID = True,
+		cyclic = (False, True) + (False,)*8,
+		cyclic_norms = (1,)*10,
+		cyclic_modes = ('deg',)*10)
 
 # with open('pickles/%s/SOM_2008-2018_%d_%s.pickle' % (directory, num_iter, str(somap.shape)), 'wb') as out_f:
 	# pickle.dump(somap, out_f)
@@ -379,18 +442,18 @@ somap = build_SOM(db_path, query_no_coords_NA,
 # exit()
 
 ################ CLUSTERING ######################
-with open('pickles/%s/SOM_2008-2018_%d_%s.pickle' % (directory, num_iter, str(shape)), 'rb') as in_f:
+with open('pickles/%s/SOM_2008-2018_%d_2%s.pickle' % (directory, num_iter, str(shape)), 'rb') as in_f:
 	somap = pickle.load(in_f)
 
 print(len(somap.data))
 
-somap.plot_activation_response(path='SOM_Plots/%s/ActivationResponse_2008-2018_%d_%s.png' % (directory, num_iter, str(somap.shape)))
-somap.plot_distance_map(path = 'SOM_Plots/%s/DistanceMap_2008-2018_%d_%s.png' % (directory, num_iter, str(somap.shape)))
+somap.plot_activation_response(path='SOM_Plots/%s/ActivationResponse_2008-2018_%d_2%s.png' % (directory, num_iter, str(somap.shape)))
+somap.plot_distance_map(path = 'SOM_Plots/%s/DistanceMap_2008-2018_%d_2%s.png' % (directory, num_iter, str(somap.shape)))
 
 somap.cluster(0.08)
-somap.cluster_analysis()
 
 somap.plot_clusters()
+exit()
 somap.plot_clusters(normalization = 'size', path = 'SOM_Plots/%s/ClustersNormalized_2008-2018_%d_%s.png' % (directory, num_iter, str(shape)))
 somap.plot_clusters(path = 'SOM_Plots/%s/Clusters_2008-2018_%d_%s.png' % (directory, num_iter, str(shape)))
 somap.cluster_report('SOM_Plots/%s/ClusterReport_2008-2018_%d_%s.txt' % (directory, num_iter, str(shape)))
